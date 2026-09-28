@@ -5,12 +5,14 @@ module CJKIndex
   #
   # Runs of CJK characters (kanji, kana, hangul) have no spaces between words,
   # so they become overlapping character bigrams: 「鳥瞰図」 -> 鳥瞰, 瞰図.
-  # Other runs (Latin letters, digits) stay whole words. Requiring every bigram
-  # of a query to be present behaves like a substring search without a
-  # dictionary.
+  # Other runs (Latin letters, digits) stay whole words. Each token carries
+  # its offset (in characters of the normalized text), so a query can require
+  # its bigrams to be adjacent and in order: an exact substring match, found
+  # without a dictionary.
   #
   # The character classes are kept as code point ranges so that Runtime can
-  # emit exactly the same classes into the browser script.
+  # emit exactly the same classes into the browser script, where the same
+  # character-by-character loop runs.
   module Tokenizer
     CJK_RANGES = [
       [0x3005, 0x3005],   # 々 iteration mark
@@ -47,27 +49,62 @@ module CJKIndex
     end
 
     CJK = Regexp.new(char_class(CJK_RANGES))
-    SEPARATOR = Regexp.new("#{char_class(SEPARATOR_RANGES, SEPARATOR_CHARS)}+")
+    SEPARATOR = Regexp.new(char_class(SEPARATOR_RANGES, SEPARATOR_CHARS))
 
-    # unigrams: true adds every single CJK character as well. Use it when
-    # indexing, so that one-character queries (「竹」) and short CJK runs
-    # between digits (「第1輯」) still match. Queries use unigrams: false.
+    # Token strings only. unigrams: true adds every single CJK character as
+    # well; the index needs them so that one-character queries (「竹」) and
+    # CJK characters between digits (「第1輯」) can be found.
     def tokenize(text, unigrams: false)
-      tokens = []
-      Normalizer.normalize(text).split(SEPARATOR).each do |chunk|
-        next if chunk.empty?
+      tokens_with_offsets(text, unigrams: unigrams).map(&:first)
+    end
 
-        chunk.scan(/#{CJK}+|(?:(?!#{CJK}).)+/o) do |run|
-          if run.match?(CJK)
-            chars = run.chars
-            tokens.concat(chars) if chars.length == 1 || unigrams
-            chars.each_cons(2) { |a, b| tokens << (a + b) }
-          else
-            tokens << run
+    # [[token, offset], ...] for the whole text. Offsets count characters of
+    # the normalized text, so the index and the query agree on them.
+    def tokens_with_offsets(text, unigrams: false)
+      phrases(text, unigrams: unigrams).flatten(1)
+    end
+
+    # Splits at separators (spaces, punctuation) into phrases, each a list of
+    # [token, offset]. A query matches when every phrase occurs somewhere in
+    # the document, with the tokens of each phrase at the same relative offsets.
+    def phrases(text, unigrams: false)
+      result = []
+      phrase = []
+      run = +""
+      run_cjk = nil
+      run_start = 0
+      flush = lambda do
+        next if run.empty?
+
+        if run_cjk
+          chars = run.chars
+          if chars.length == 1 || unigrams
+            chars.each_with_index { |c, i| phrase << [c, run_start + i] }
           end
+          chars.each_cons(2).with_index { |(a, b), i| phrase << [a + b, run_start + i] }
+        else
+          phrase << [run.dup, run_start]
         end
+        run = +""
       end
-      tokens
+
+      Normalizer.normalize(text).each_char.with_index do |ch, offset|
+        if ch.match?(SEPARATOR)
+          flush.call
+          result << phrase unless phrase.empty?
+          phrase = []
+          run_cjk = nil
+          next
+        end
+        cjk = ch.match?(CJK)
+        flush.call if !run_cjk.nil? && cjk != run_cjk
+        run_start = offset if run.empty?
+        run_cjk = cjk
+        run << ch
+      end
+      flush.call
+      result << phrase unless phrase.empty?
+      result
     end
   end
 end

@@ -21,6 +21,11 @@ class TestTokenizer < Minitest::Test
     assert_equal %w[第 1 輯 iiif まに にふ ふぇ ぇす すと], t("第1輯、IIIF「マニフェスト」")
   end
 
+  def test_offsets_and_phrases
+    assert_equal [[["鳥瞰", 0], ["瞰図", 1]], [["iiif", 4]]], CJKIndex::Tokenizer.phrases("鳥瞰圖 IIIF")
+    assert_equal [["第", 0], ["1", 1], ["輯", 2]], CJKIndex::Tokenizer.tokens_with_offsets("第1輯")
+  end
+
   def test_hangul_is_cjk
     assert_equal %w[서울 울대 대학], t("서울대학")
   end

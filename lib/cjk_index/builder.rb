@@ -9,18 +9,25 @@ module CJKIndex
   #   builder.add("item1.html", "title" => "東京帝國大學", "creator" => "…")
   #   File.write("search-index.json", builder.to_json)
   #
-  # Format (version 1):
+  # Format (version 2):
   #   {
-  #     "format": "cjk_index/1",
-  #     "fields": ["title", "creator"],
-  #     "boosts": [3, 1],
-  #     "refs":   ["item1.html", ...],
-  #     "tokens": { "東京": [doc, field, tf, doc, field, tf, ...], ... }
+  #     "format":  "cjk_index/2",
+  #     "fields":  ["title", "creator"],
+  #     "boosts":  [3, 1],
+  #     "refs":    ["item1.html", ...],
+  #     "lengths": [len(doc0.title), len(doc0.creator), len(doc1.title), ...],
+  #     "tokens":  { "東京": [doc, field, n, pos1, ..., posn, doc, field, n, ...], ... }
   #   }
-  # doc and field are positions in "refs" and "fields". Postings are flat
-  # integer triples because that is the smallest plain-JSON form.
+  # doc and field are positions in "refs" and "fields"; n is the number of
+  # occurrences and pos are character offsets in the normalized field text.
+  # Offsets let the runtime require the bigrams of a query to be adjacent
+  # (exact substring match); lengths feed BM25 ranking.
   class Builder
-    FORMAT = "cjk_index/1"
+    FORMAT = "cjk_index/2"
+
+    # Gap between the values of a multi-valued field, so that a phrase cannot
+    # match across two values.
+    VALUE_GAP = 1
 
     attr_reader :fields, :refs
 
@@ -30,6 +37,7 @@ module CJKIndex
       @fields = fields.map(&:to_s)
       @boosts = @fields.map { |f| (boosts[f] || boosts[f.to_sym] || 1).to_f }
       @refs = []
+      @lengths = []
       @postings = Hash.new { |h, k| h[k] = [] }
     end
 
@@ -40,13 +48,15 @@ module CJKIndex
       @refs << ref.to_s
       @fields.each_with_index do |field, field_index|
         value = doc[field] || doc[field.to_sym]
-        next if value.nil?
-
-        counts = Hash.new(0)
+        positions = Hash.new { |h, k| h[k] = [] }
+        base = 0
         Array(value).each do |v|
-          Tokenizer.tokenize(v.to_s, unigrams: true).each { |t| counts[t] += 1 }
+          text = v.to_s
+          Tokenizer.tokens_with_offsets(text, unigrams: true).each { |t, offset| positions[t] << (base + offset) }
+          base += Normalizer.normalize(text).length + VALUE_GAP
         end
-        counts.each { |token, tf| @postings[token].push(doc_index, field_index, tf) }
+        @lengths << [base - VALUE_GAP, 0].max
+        positions.each { |token, offsets| @postings[token].push(doc_index, field_index, offsets.length, *offsets) }
       end
       self
     end
@@ -57,6 +67,7 @@ module CJKIndex
         "fields" => @fields,
         "boosts" => @boosts.map { |b| b == b.to_i ? b.to_i : b },
         "refs" => @refs,
+        "lengths" => @lengths,
         "tokens" => @postings.sort.to_h
       }
     end
