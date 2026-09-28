@@ -28,6 +28,9 @@ even when it is an exact title. cjk_index instead:
 The browser script is about 6.5 KB gzipped with the Japanese table, 24 KB
 with the Chinese table as well.
 
+How this compares with Pagefind, kensaku, lunr.js and others:
+[docs/comparison.md](docs/comparison.md).
+
 ## Ruby
 
 ```ruby
