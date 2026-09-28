@@ -6,9 +6,10 @@ Gem::Specification.new do |spec|
   spec.name = "cjk_index"
   spec.version = CJKIndex::VERSION
   spec.authors = ["Satoru Nakamura"]
-  spec.summary = "Dictionary-free full-text search for Chinese, Japanese and Korean on static sites"
+  spec.summary = "Dictionary-free full-text search for Chinese, Japanese and Korean in pure Ruby and the browser"
   spec.description = "Builds a bigram search index in Ruby (with kana, old/new kanji and NFKC " \
-                     "normalization) and ships a small browser runtime to query it. " \
+                     "normalization), and queries it in Ruby or with a small browser runtime " \
+                     "that returns the same results. " \
                      "Includes a Jekyll plugin and a CollectionBuilder preset."
   spec.homepage = "https://github.com/nakamura196/cjk_index"
   spec.license = "MIT"

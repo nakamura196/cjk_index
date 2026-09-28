@@ -1,8 +1,9 @@
 # cjk_index
 
-Dictionary-free full-text search for Chinese, Japanese and Korean text on
-static sites. The index is built in Ruby at build time. A small browser
-script (no dependencies) queries it.
+Dictionary-free full-text search for Chinese, Japanese and Korean text, in
+pure Ruby. Build the index in Ruby, then query it in Ruby (`CJKIndex::Searcher`)
+or in the browser with a small script that has no dependencies. Both return
+the same results.
 
 Why: client-side search in most Ruby static sites uses lunr.js with its
 English defaults. lunr's trimmer removes every non-`\w` character, and kanji,
@@ -41,6 +42,24 @@ builder.add("item1.html", "title" => "東京帝國大學本部構内及農學部
 File.write("search.json", builder.to_json)
 File.write("cjk-index.js", CJKIndex::Runtime.source)
 ```
+
+### Search in Ruby
+
+No search server or native extension is needed. `Searcher` takes a
+`Builder`, its `to_h`, or the JSON it wrote, and folds queries with the
+variant tables the index was built with.
+
+```ruby
+searcher = CJKIndex::Searcher.new(builder)   # or CJKIndex::Searcher.load("search.json")
+searcher.search("鳥瞰図")
+# => [{ ref: "item1.html", score: 0.86, fields: ["title"] }]
+searcher.highlight("東京帝國大學", "帝国大学")   # => "東京<mark>帝國大學</mark>"
+searcher.excerpt(long_text, "鳥瞰図", 80)
+```
+
+Matching, BM25 ranking, highlighting and excerpts follow the browser script
+step for step. The test suite runs both on the same index and checks that
+refs, scores, matched fields, highlights and excerpts are identical.
 
 ## Browser
 
