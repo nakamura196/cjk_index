@@ -12,9 +12,10 @@ Demo video (2 min): [English](https://www.youtube.com/watch?v=me46kC3JU8Q) ·
 Try it: [demo site](https://nakamura196.github.io/cb-ja-demo/) ·
 [stock search vs. cjk_index on the same data](https://nakamura196.github.io/cb-ja-demo/compare.html).
 
-Why: client-side search in most Ruby static sites uses lunr.js with its
-English defaults. lunr's trimmer removes every non-`\w` character, and kanji,
-kana and hangul are all non-`\w`, so a Japanese query returns **0 results**,
+Why: client-side search in many Ruby static sites uses lunr.js with its
+English defaults. lunr's trimmer strips non-`\w` characters from both ends of
+each token, and kanji, kana and hangul are all non-`\w`, so a token made only
+of them becomes empty and a Japanese query returns **0 results**,
 even when it is an exact title. cjk_index instead:
 
 - splits CJK runs into overlapping character bigrams (「鳥瞰図」→ 鳥瞰, 瞰図) and

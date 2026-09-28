@@ -62,8 +62,8 @@ measured how often they disagree on Japanese titles.
 The pieces for Japanese normalization exist in Ruby, but as separate,
 mostly unmaintained gems, and none of them reaches the browser side of a
 static site. Stock Jekyll search (lunr.js with English defaults) returns zero
-results for any CJK query, because lunr's trimmer removes every non-`\w`
-character; see the [README](../README.md).
+results for any CJK query, because lunr's trimmer strips non-`\w`
+characters from both ends of each token; see the [README](../README.md).
 
 ## What cjk_index does differently
 
