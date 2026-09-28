@@ -1,0 +1,5 @@
+objectid,parentid,title,creator,description
+item1,,東京帝國大學本部構内及農學部建物鳥瞰圖,東京帝國大學,非表示の説明
+item2,,國牛十圖,,
+child1,item1,部分図,,
+,,no id,,
