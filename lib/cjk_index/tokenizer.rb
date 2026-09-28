@@ -15,13 +15,17 @@ module CJKIndex
   # character-by-character loop runs.
   module Tokenizer
     CJK_RANGES = [
+      [0x1100, 0x11FF],   # hangul jamo (old hangul is written as jamo sequences)
       [0x3005, 0x3005],   # 々 iteration mark
       [0x3007, 0x3007],   # 〇
       [0x3040, 0x309F],   # hiragana
       [0x30A0, 0x30FF],   # katakana
+      [0x3130, 0x318F],   # hangul compatibility jamo
       [0x3400, 0x4DBF],   # CJK extension A
       [0x4E00, 0x9FFF],   # CJK unified ideographs
+      [0xA960, 0xA97F],   # hangul jamo extended-A
       [0xAC00, 0xD7AF],   # hangul syllables
+      [0xD7B0, 0xD7FF],   # hangul jamo extended-B
       [0xF900, 0xFAFF],   # CJK compatibility ideographs
       [0x20000, 0x2FA1F]  # CJK extensions B- and compatibility supplement
     ].freeze

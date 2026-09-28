@@ -10,7 +10,7 @@ require "tmpdir"
 class TestRuntime < Minitest::Test
   SAMPLES = [
     "東京帝國大學本部構内及農學部建物鳥瞰圖", "サクラ", "ＩＩＩＦ　２０２４", "佐々木",
-    "第1輯、IIIF「マニフェスト」", "서울대학교 도서관", "Hello, World! 羣芳圖譜", "𠮟る", ""
+    "第1輯、IIIF「マニフェスト」", "서울대학교 도서관", "Hello, World! 羣芳圖譜", "𠮟る", "ᄒᆞᆫ글 소학언초", ""
   ].freeze
 
   def setup

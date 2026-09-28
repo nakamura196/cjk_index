@@ -29,4 +29,9 @@ class TestTokenizer < Minitest::Test
   def test_hangul_is_cjk
     assert_equal %w[서울 울대 대학], t("서울대학")
   end
+
+  def test_old_hangul_jamo_are_cjk
+    # ᄒᆞᆫ (arae-a, no precomposed syllable): three jamo, kept in one run
+    assert_equal ["ᄒᆞ", "ᆞᆫ", "ᆫ글"], t("ᄒᆞᆫ글")
+  end
 end
