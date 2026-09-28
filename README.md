@@ -5,6 +5,13 @@ pure Ruby. Build the index in Ruby, then query it in Ruby (`CJKIndex::Searcher`)
 or in the browser with a small script that has no dependencies. Both return
 the same results.
 
+[![Demo video: CJK search in CollectionBuilder, before and after cjk_index](https://img.youtube.com/vi/me46kC3JU8Q/hqdefault.jpg)](https://www.youtube.com/watch?v=me46kC3JU8Q)
+
+Demo video (2 min): [English](https://www.youtube.com/watch?v=me46kC3JU8Q) ·
+[日本語](https://www.youtube.com/watch?v=B1PO2l3iPHo).
+Try it: [demo site](https://nakamura196.github.io/cb-ja-demo/) ·
+[stock search vs. cjk_index on the same data](https://nakamura196.github.io/cb-ja-demo/compare.html).
+
 Why: client-side search in most Ruby static sites uses lunr.js with its
 English defaults. lunr's trimmer removes every non-`\w` character, and kanji,
 kana and hangul are all non-`\w`, so a Japanese query returns **0 results**,
