@@ -30,6 +30,15 @@ class TestJekyll < Minitest::Test
       assert_equal %w[item1.html item2.html], index["refs"]
       assert index["tokens"].key?("鳥瞰")
       refute index["tokens"].key?("非表示"), "description is not an index field"
+      assert_equal %w[ja], index["variants"]
+    end
+  end
+
+  def test_variants_option
+    build("cjk_index" => { "variants" => %w[ja zh], "indexes" => [{ "name" => "search", "preset" => "collectionbuilder" }] }) do |dest|
+      index = JSON.parse(File.read(File.join(dest, "assets/cjk-index/search.json")))
+      assert_equal %w[ja zh], index["variants"]
+      assert_includes File.read(File.join(dest, "assets/cjk-index/cjk-index.js")), '["ja","zh"]'
     end
   end
 end

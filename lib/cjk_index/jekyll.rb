@@ -9,6 +9,7 @@ module CJKIndex
   #
   #   cjk_index:
   #     output: assets/cjk-index          # where files are written (default)
+  #     variants: [ja]                    # variant tables: ja (default), zh (Traditional -> Simplified)
   #     indexes:
   #       - name: posts                   # -> assets/cjk-index/posts.json
   #         collection: posts             # a Jekyll collection, or...
@@ -52,9 +53,10 @@ module CJKIndex
         return unless config.is_a?(Hash)
 
         output = config.fetch("output", DEFAULT_OUTPUT).sub(%r{\A/+}, "").sub(%r{/+\z}, "")
-        site.static_files << GeneratedFile.new(site, output, RUNTIME_NAME, Runtime.source)
+        normalizer = Normalizer.new(tables: Array(config.fetch("variants", Normalizer::DEFAULT_TABLES)))
+        site.static_files << GeneratedFile.new(site, output, RUNTIME_NAME, Runtime.source(normalizer: normalizer))
         Array(config["indexes"]).each do |spec|
-          builder = build(site, spec)
+          builder = build(site, spec, normalizer)
           name = "#{spec.fetch('name')}.json"
           site.static_files << GeneratedFile.new(site, output, name, builder.to_json)
           ::Jekyll.logger.info "cjk_index:", "#{output}/#{name} (#{builder.refs.length} documents)"
@@ -63,11 +65,12 @@ module CJKIndex
 
       private
 
-      def build(site, spec)
-        return Presets::CollectionBuilder.build(site, spec) if spec["preset"] == "collectionbuilder"
+      def build(site, spec, normalizer)
+        return Presets::CollectionBuilder.build(site, spec, normalizer) if spec["preset"] == "collectionbuilder"
         raise ::Jekyll::Errors::FatalException, "cjk_index: unknown preset #{spec['preset']}" if spec["preset"]
 
-        builder = Builder.new(fields: Array(spec.fetch("fields")), boosts: spec.fetch("boosts", {}))
+        builder = Builder.new(fields: Array(spec.fetch("fields")), boosts: spec.fetch("boosts", {}),
+                              normalizer: normalizer)
         if spec["collection"]
           docs = site.collections.fetch(spec["collection"]) do
             raise ::Jekyll::Errors::FatalException, "cjk_index: no collection #{spec['collection']}"
@@ -97,14 +100,14 @@ module CJKIndex
       module CollectionBuilder
         module_function
 
-        def build(site, spec)
+        def build(site, spec, normalizer)
           rows = Array(site.data[site.config["metadata"]])
           children = site.data.dig("theme", "search-child-objects") == true
           fields = Array(site.data["config-search"])
                    .select { |f| f["index"].to_s == "true" }
                    .map { |f| f["field"] }
           boosts = spec.fetch("boosts") { fields.first ? { fields.first => 3 } : {} }
-          builder = Builder.new(fields: fields, boosts: boosts)
+          builder = Builder.new(fields: fields, boosts: boosts, normalizer: normalizer)
           rows.each do |row|
             next if row["objectid"].to_s.empty?
             next if !row["parentid"].to_s.empty? && !children

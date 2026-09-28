@@ -11,11 +11,12 @@ module CJKIndex
 
     module_function
 
-    def source
+    def source(normalizer: Normalizer.default)
       File.read(TEMPLATE_PATH, encoding: "UTF-8")
           # Block form: a replacement string would treat its backslashes as
           # back-references and drop half of the regexp escapes.
-          .sub("/*@VARIANTS@*/{}") { JSON.generate(Normalizer.variants) }
+          .sub("/*@VARIANTS@*/{}") { JSON.generate(normalizer.variants) }
+          .sub("/*@TABLES@*/[]") { JSON.generate(normalizer.tables) }
           .sub("/*@CJK@*/''") { JSON.generate(Tokenizer.char_class(Tokenizer::CJK_RANGES)) }
           .sub("/*@SEPARATOR@*/''") do
             JSON.generate(Tokenizer.char_class(Tokenizer::SEPARATOR_RANGES, Tokenizer::SEPARATOR_CHARS))

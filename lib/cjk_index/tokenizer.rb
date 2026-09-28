@@ -54,20 +54,20 @@ module CJKIndex
     # Token strings only. unigrams: true adds every single CJK character as
     # well; the index needs them so that one-character queries (「竹」) and
     # CJK characters between digits (「第1輯」) can be found.
-    def tokenize(text, unigrams: false)
-      tokens_with_offsets(text, unigrams: unigrams).map(&:first)
+    def tokenize(text, unigrams: false, normalizer: Normalizer.default)
+      tokens_with_offsets(text, unigrams: unigrams, normalizer: normalizer).map(&:first)
     end
 
     # [[token, offset], ...] for the whole text. Offsets count characters of
     # the normalized text, so the index and the query agree on them.
-    def tokens_with_offsets(text, unigrams: false)
-      phrases(text, unigrams: unigrams).flatten(1)
+    def tokens_with_offsets(text, unigrams: false, normalizer: Normalizer.default)
+      phrases(text, unigrams: unigrams, normalizer: normalizer).flatten(1)
     end
 
     # Splits at separators (spaces, punctuation) into phrases, each a list of
     # [token, offset]. A query matches when every phrase occurs somewhere in
     # the document, with the tokens of each phrase at the same relative offsets.
-    def phrases(text, unigrams: false)
+    def phrases(text, unigrams: false, normalizer: Normalizer.default)
       result = []
       phrase = []
       run = +""
@@ -88,7 +88,7 @@ module CJKIndex
         run = +""
       end
 
-      Normalizer.normalize(text).each_char.with_index do |ch, offset|
+      normalizer.normalize(text).each_char.with_index do |ch, offset|
         if ch.match?(SEPARATOR)
           flush.call
           result << phrase unless phrase.empty?

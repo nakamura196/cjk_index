@@ -1,0 +1,7 @@
+cjk_index
+Copyright (c) 2026 Satoru Nakamura. MIT License (see LICENSE).
+
+data/zh-hant-hans.tsv is derived from OpenCC (https://github.com/BYVoid/OpenCC),
+data/dictionary/TSCharacters.txt, Copyright (c) 2010-2026 Carbo Kuo and contributors,
+licensed under the Apache License, Version 2.0 (see LICENSE-OpenCC).
+Changes are described at the top of that file.

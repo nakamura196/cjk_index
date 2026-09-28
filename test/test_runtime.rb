@@ -17,9 +17,9 @@ class TestRuntime < Minitest::Test
     skip "node is not installed" unless system("node", "--version", out: File::NULL, err: File::NULL)
   end
 
-  def run_node(script, input)
+  def run_node(script, input, normalizer: CJKIndex::Normalizer.default)
     Dir.mktmpdir do |dir|
-      File.write(File.join(dir, "cjk-index.js"), CJKIndex::Runtime.source)
+      File.write(File.join(dir, "cjk-index.js"), CJKIndex::Runtime.source(normalizer: normalizer))
       File.write(File.join(dir, "run.js"), script)
       out, err, status = Open3.capture3("node", File.join(dir, "run.js"), stdin_data: JSON.generate(input))
       assert status.success?, err
@@ -71,6 +71,28 @@ class TestRuntime < Minitest::Test
     b.add("b", "title" => "Photograph of 桜")
     assert_equal [%w[a], %w[b], %w[a], []], search(b, ["mani", "photgraph", "manifest 解説", "iii 桜"])
     assert_equal [[], []], search(b, %w[mani photgraph], { "prefix" => false, "typos" => false })
+  end
+
+  def test_chinese_tables_match_ruby
+    zh = CJKIndex::Normalizer.new(tables: %w[ja zh])
+    samples = ["國立故宮博物院", "国立故宫博物院", "圖書館 图书馆", "東京帝國大學"]
+    js = run_node(<<~JS, samples, normalizer: zh)
+      const c = require('./cjk-index.js');
+      const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+      console.log(JSON.stringify([c.tables, input.map(s => c.normalize(s))]));
+    JS
+    assert_equal [%w[ja zh], samples.map { |s| zh.normalize(s) }], js
+  end
+
+  def test_index_and_script_must_use_the_same_tables
+    b = CJKIndex::Builder.new(fields: %w[title], normalizer: CJKIndex::Normalizer.new(tables: %w[ja zh]))
+    b.add("a", "title" => "圖書館")
+    out = run_node(<<~JS, b.to_h)
+      const c = require('./cjk-index.js');
+      const data = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+      try { new c.Index(data); console.log('"loaded"'); } catch (e) { console.log(JSON.stringify(e.message)); }
+    JS
+    assert_match(/rebuild both together/, out)
   end
 
   def test_highlight_maps_back_to_original_text

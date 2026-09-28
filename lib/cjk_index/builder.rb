@@ -12,6 +12,7 @@ module CJKIndex
   # Format (version 2):
   #   {
   #     "format":  "cjk_index/2",
+  #     "variants": ["ja"],
   #     "fields":  ["title", "creator"],
   #     "boosts":  [3, 1],
   #     "refs":    ["item1.html", ...],
@@ -29,11 +30,15 @@ module CJKIndex
     # match across two values.
     VALUE_GAP = 1
 
-    attr_reader :fields, :refs
+    attr_reader :fields, :refs, :normalizer
 
-    def initialize(fields:, boosts: {})
+    # normalizer must match the one the runtime script was generated with
+    # (Runtime.source(normalizer:)); the index records its tables and the
+    # runtime refuses an index built with different ones.
+    def initialize(fields:, boosts: {}, normalizer: Normalizer.default)
       raise ArgumentError, "fields must not be empty" if fields.empty?
 
+      @normalizer = normalizer
       @fields = fields.map(&:to_s)
       @boosts = @fields.map { |f| (boosts[f] || boosts[f.to_sym] || 1).to_f }
       @refs = []
@@ -52,8 +57,9 @@ module CJKIndex
         base = 0
         Array(value).each do |v|
           text = v.to_s
-          Tokenizer.tokens_with_offsets(text, unigrams: true).each { |t, offset| positions[t] << (base + offset) }
-          base += Normalizer.normalize(text).length + VALUE_GAP
+          Tokenizer.tokens_with_offsets(text, unigrams: true, normalizer: @normalizer)
+                   .each { |t, offset| positions[t] << (base + offset) }
+          base += @normalizer.normalize(text).length + VALUE_GAP
         end
         @lengths << [base - VALUE_GAP, 0].max
         positions.each { |token, offsets| @postings[token].push(doc_index, field_index, offsets.length, *offsets) }
@@ -64,6 +70,7 @@ module CJKIndex
     def to_h
       {
         "format" => FORMAT,
+        "variants" => @normalizer.tables,
         "fields" => @fields,
         "boosts" => @boosts.map { |b| b == b.to_i ? b.to_i : b },
         "refs" => @refs,

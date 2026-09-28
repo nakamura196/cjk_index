@@ -9,7 +9,9 @@ require_relative "cjk_index/runtime"
 # Dictionary-free full-text search for Chinese, Japanese and Korean text on
 # static sites: build the index in Ruby, query it in the browser.
 module CJKIndex
-  def self.normalize(text) = Normalizer.normalize(text)
+  def self.normalize(text, normalizer: Normalizer.default) = normalizer.normalize(text)
 
-  def self.tokenize(text, unigrams: false) = Tokenizer.tokenize(text, unigrams: unigrams)
+  def self.tokenize(text, unigrams: false, normalizer: Normalizer.default)
+    Tokenizer.tokenize(text, unigrams: unigrams, normalizer: normalizer)
+  end
 end
