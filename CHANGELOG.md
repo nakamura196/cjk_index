@@ -1,10 +1,5 @@
 # Changelog
 
-## Unreleased
-
-- `examples/search_csv.rb`: search a CSV catalog from the command line, without Jekyll.
-- Benchmarks on Aozora Bunko (up to 16,951 works): [bench/README.md](bench/README.md).
-
 ## 0.1.0 (2026-10-02)
 
 First release on RubyGems.
@@ -21,4 +16,9 @@ First release on RubyGems.
   from the same tables; the test suite requires identical results in Ruby and
   under Node.
 - Jekyll plugin (`cjk_index/jekyll`) with a CollectionBuilder preset.
+
+In the repository (not packaged in the gem):
+
+- `examples/search_csv.rb`: search a CSV catalog from the command line, without Jekyll.
+- Benchmarks on Aozora Bunko (up to 16,951 works): [bench/README.md](bench/README.md).
 - Comparison with other search tools: [docs/comparison.md](docs/comparison.md).
