@@ -44,6 +44,10 @@ Index size and query time on up to 16,951 works of Aozora Bunko:
 
 ## Ruby
 
+```console
+$ gem install cjk_index
+```
+
 ```ruby
 require "cjk_index"
 
@@ -156,8 +160,10 @@ it is opt-in.
 
 ## Status
 
-0.1, early. Not yet on RubyGems. Planned: index sharding for large sites, a
-Bridgetown adapter, a CLI, and size and speed benchmarks.
+0.1, early. On RubyGems: `gem install cjk_index`
+(https://rubygems.org/gems/cjk_index). Planned: filters and incremental index
+updates, index sharding for large sites (see the [benchmarks](bench/README.md)),
+a Bridgetown adapter and a CLI.
 
 ## Development
 
