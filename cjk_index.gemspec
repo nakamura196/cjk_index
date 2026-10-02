@@ -15,8 +15,11 @@ Gem::Specification.new do |spec|
   spec.licenses = ["MIT", "Apache-2.0"] # Apache-2.0: the optional OpenCC-derived table (data/zh-hant-hans.tsv)
   spec.required_ruby_version = ">= 3.1"
   spec.metadata["source_code_uri"] = spec.homepage
+  spec.metadata["documentation_uri"] = "#{spec.homepage}#readme"
+  spec.metadata["changelog_uri"] = "#{spec.homepage}/blob/main/CHANGELOG.md"
+  spec.metadata["bug_tracker_uri"] = "#{spec.homepage}/issues"
   spec.metadata["rubygems_mfa_required"] = "true"
 
-  spec.files = Dir["lib/**/*.{rb,js}", "data/*", "LICENSE", "LICENSE-OpenCC", "NOTICE", "README.md"]
+  spec.files = Dir["lib/**/*.{rb,js}", "data/*", "LICENSE", "LICENSE-OpenCC", "NOTICE", "README.md", "CHANGELOG.md"]
   spec.require_paths = ["lib"]
 end
