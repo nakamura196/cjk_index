@@ -39,6 +39,8 @@ with the Chinese table as well.
 
 How this compares with Pagefind, kensaku, lunr.js and others:
 [docs/comparison.md](docs/comparison.md).
+Index size and query time on up to 16,951 works of Aozora Bunko:
+[bench/README.md](bench/README.md).
 
 ## Ruby
 
@@ -68,6 +70,22 @@ searcher.excerpt(long_text, "鳥瞰図", 80)
 Matching, BM25 ranking, highlighting and excerpts follow the browser script
 step for step. The test suite runs both on the same index and checks that
 refs, scores, matched fields, highlights and excerpts are identical.
+
+### Without Jekyll
+
+[examples/search_csv.rb](examples/search_csv.rb) searches a CSV catalogue from
+the command line, in about 40 lines of plain Ruby:
+
+```console
+$ ruby examples/search_csv.rb items.csv 实录 --ref objectid --variants ja,zh
+12 results for 实录
+jitsu_51ed985b       宣祖[実録] 第1帙 第1冊 巻2戊辰元年(1568)
+...
+$ ruby examples/search_csv.rb items.csv 帝国大学 --ref objectid
+3 results for 帝国大学
+agri_6d032fb5        東京[帝國大學]農學部建物位置圖
+...
+```
 
 ## Browser
 

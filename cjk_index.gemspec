@@ -12,7 +12,7 @@ Gem::Specification.new do |spec|
                      "that returns the same results. " \
                      "Includes a Jekyll plugin and a CollectionBuilder preset."
   spec.homepage = "https://github.com/nakamura196/cjk_index"
-  spec.license = "MIT"
+  spec.licenses = ["MIT", "Apache-2.0"] # Apache-2.0: the optional OpenCC-derived table (data/zh-hant-hans.tsv)
   spec.required_ruby_version = ">= 3.1"
   spec.metadata["source_code_uri"] = spec.homepage
   spec.metadata["rubygems_mfa_required"] = "true"
