@@ -77,7 +77,7 @@ refs, scores, matched fields, highlights and excerpts are identical.
 
 ### Without Jekyll
 
-[examples/search_csv.rb](examples/search_csv.rb) searches a CSV catalogue from
+[examples/search_csv.rb](examples/search_csv.rb) searches a CSV catalog from
 the command line, in about 40 lines of plain Ruby:
 
 ```console

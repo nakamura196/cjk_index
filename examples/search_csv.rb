@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Search a CSV catalogue from the command line, with no server and no Jekyll.
+# Search a CSV catalog from the command line, with no server and no Jekyll.
 #
 #   ruby examples/search_csv.rb items.csv 帝国大学
 #   ruby examples/search_csv.rb items.csv 实录 --fields title,creator --ref objectid --variants ja,zh

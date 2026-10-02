@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- `examples/search_csv.rb`: search a CSV catalogue from the command line, without Jekyll.
+- `examples/search_csv.rb`: search a CSV catalog from the command line, without Jekyll.
 - Benchmarks on Aozora Bunko (up to 16,951 works): [bench/README.md](bench/README.md).
 
 ## 0.1.0 (2026-10-02)
