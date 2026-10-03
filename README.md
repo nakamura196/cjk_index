@@ -37,10 +37,22 @@ even when it is an exact title. cjk_index instead:
 The browser script is about 6.5 KB gzipped with the Japanese table, 24 KB
 with the Chinese table as well.
 
-How this compares with Pagefind, kensaku, lunr.js and others:
+How this compares with Pagefind, kensaku, lunr.js, rroonga, tantiny and others:
 [docs/comparison.md](docs/comparison.md).
 Index size and query time on up to 16,951 works of Aozora Bunko:
 [bench/README.md](bench/README.md).
+
+When to use it, and when not to:
+
+- **Good fit:** catalogs, collection records or blog posts, up to about 20,000
+  records; static sites, command-line tools, scripts and small apps; anywhere
+  you want nothing to install outside Ruby, or the same results in Ruby and
+  the browser.
+- **Not a good fit (yet):** large amounts of full text, frequent updates, or
+  search served continuously by a server. The whole index is held in memory
+  and shipped as one file: about 5 bytes per character gzipped, and 3 GB of
+  memory to build 35.6 million characters. A native engine (rroonga, tantiny)
+  or a database feature (pg_bigm) is the better choice there.
 
 ## Ruby
 
