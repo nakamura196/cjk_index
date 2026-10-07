@@ -1,0 +1,17 @@
+utokyo: 69 records, 15 queries, configs lunr-default, lunr-ja-or, lunr-ja-and
+query segmentation (lunr.ja.tokenizer):
+  u01 竹類 -> 竹類
+  u02 諺解 -> 諺解
+  u03 소학 -> 소 | 학
+  u04 実録 -> 実録
+  u05 鳥瞰図 -> 鳥瞰図
+  u06 群芳図譜 -> 群芳 | 図譜
+  u07 東京帝国大学 -> 東京 | 帝国 | 大学
+  u08 写生 -> 写生
+  u09 农学部 -> 农学部
+  u10 ぐんぼう -> ぐんぼう
+  u11 ゆり -> ゆり
+  u12 佐佐木 -> 佐佐木
+  u13 林学 -> 林学
+  u14 京都 -> 京都
+  u15 存在しない資料 -> 存在 | し | ない | 資料
