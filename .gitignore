@@ -5,3 +5,11 @@
 /tmp/
 *.gem
 .DS_Store
+
+# env / secret files
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+.npmrc
