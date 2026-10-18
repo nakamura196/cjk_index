@@ -1,0 +1,9 @@
+{
+  "name": "cjk-index-bench-retrieval",
+  "private": true,
+  "description": "Retrieval evaluation of cjk_index against lunr.js",
+  "dependencies": {
+    "lunr": "2.3.9",
+    "lunr-languages": "1.21.0"
+  }
+}

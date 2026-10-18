@@ -1,0 +1,17 @@
+aozora: 16951 records, 15 queries, configs lunr-default, lunr-ja-or, lunr-ja-and
+query segmentation (lunr.ja.tokenizer):
+  a01 停車場 -> 停車場
+  a02 夏目漱石 -> 夏目 | 漱石
+  a03 鉄道 -> 鉄道
+  a04 戦争 -> 戦争
+  a05 帝国大学 -> 帝国 | 大学
+  a06 証明 -> 証明
+  a07 台風 -> 台風
+  a08 弁当 -> 弁当
+  a09 ランプ -> ランプ
+  a10 ネコ -> ネコ
+  a11 カメ -> カメ
+  a12 カキ -> カキ
+  a13 京都 -> 京都
+  a14 辯 -> 辯
+  a15 存在しない語句 -> 存在 | し | ない | 語句

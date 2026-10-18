@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>cjk_index browser benchmark</title>
+</head>
+<body>
+<pre id="log">loading…</pre>
+<script src="/cache/cjk-index.js"></script>
+<script>
+// One measurement per page load. The server (serve.mjs) hands out the plan
+// one step at a time (/next), receives the result (/result), and the page
+// reloads itself for the next step, so every load starts from a new document
+// and an uncached index (the server sends Cache-Control: no-store).
+const log = (s) => { document.getElementById('log').textContent = s; };
+const median = (xs) => { const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+const REPS = 10;   // a trial runs a query REPS times; Safari's clock is 1 ms coarse
+const TRIALS = 5;
+
+(async () => {
+  const browser = new URLSearchParams(location.search).get('browser') || 'unknown';
+  const step = await (await fetch('/next', { cache: 'no-store' })).json();
+  if (step.done) { log('done'); return; }
+  const { n, run } = step;
+  log(`n=${n} run=${run}`);
+
+  const queries = await (await fetch('/queries.json', { cache: 'no-store' })).json();
+  const expected = await (await fetch(`/cache/expected-${n}.json`, { cache: 'no-store' })).json();
+
+  // Load: download (gzip on the wire, decoded by the browser), parse, build the Index.
+  let t = performance.now();
+  const res = await fetch(`/index-${n}.json`, { cache: 'no-store' });
+  const text = await res.text();
+  const tFetch = performance.now() - t;
+  t = performance.now();
+  const data = JSON.parse(text);
+  const tParse = performance.now() - t;
+  t = performance.now();
+  const idx = new CJKIndex.Index(data);
+  const tInit = performance.now() - t;
+
+  const times = {}, hits = {}, mismatch = [];
+  for (const q of queries) {
+    const first = idx.search(q).map((r) => r.ref);
+    hits[q] = first.length;
+    if (JSON.stringify(first) !== JSON.stringify(expected[q])) mismatch.push(q);
+    const trials = [];
+    for (let i = 0; i < TRIALS; i++) {
+      const t0 = performance.now();
+      for (let k = 0; k < REPS; k++) idx.search(q);
+      trials.push((performance.now() - t0) / REPS);
+    }
+    times[q] = median(trials);
+  }
+
+  const memory = performance.memory ? performance.memory.usedJSHeapSize : null;
+  const result = {
+    browser, userAgent: navigator.userAgent, n, run,
+    fetch_ms: tFetch, parse_ms: tParse, init_ms: tInit, load_ms: tFetch + tParse + tInit,
+    used_js_heap_bytes: memory, times, hits, mismatch,
+  };
+  await fetch(`/result?browser=${encodeURIComponent(browser)}`, { method: 'POST', body: JSON.stringify(result) });
+  location.reload();
+})().catch((e) => {
+  log(String(e && e.stack || e));
+  fetch('/error', { method: 'POST', body: String(e && e.stack || e) });
+});
+</script>
+</body>
+</html>
