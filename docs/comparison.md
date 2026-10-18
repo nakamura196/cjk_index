@@ -92,7 +92,7 @@ The native tools generally search and build faster, use less memory while buildi
 keep the index on disk, and have filtering and incremental updates. They are
 the right choice for large amounts of full text or a search served
 continuously by a server. cjk_index is for the smaller cases: catalogs and
-blog posts up to about 20,000 records, static sites, command-line tools and
+blog posts up to the 16,951 records we measured, static sites, command-line tools and
 small apps, where installing nothing outside Ruby and getting the same
 results in Ruby and the browser matter more than raw speed.
 

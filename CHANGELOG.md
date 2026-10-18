@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.1 (2026-10-18)
+
+No change to the library. This release fixes the state of the repository
+cited in a paper.
+
+- Retrieval quality on two real datasets (69 catalog records from cb-ja-demo,
+  16,951 Aozora Bunko works; 15 queries each), against lunr.js with its
+  default and Japanese settings: [bench/retrieval/](bench/retrieval/).
+  Queries, relevance judgments (committed before the runs), judging rules,
+  scripts and raw outputs are included.
+- Load and query times in Chrome and Safari for 1,000, 5,000 and 16,951
+  records: [bench/browser/](bench/browser/).
+- README and docs/comparison.md: the recommended size is now the range we
+  measured (up to 16,951 records), not "about 20,000".
+- CITATION.cff for citing the software.
+
 ## 0.1.0 (2026-10-02)
 
 First release on RubyGems.

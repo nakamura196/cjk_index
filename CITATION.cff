@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "cjk_index: dictionary-free full-text search for Chinese, Japanese and Korean"
+type: software
+authors:
+  - family-names: Nakamura
+    given-names: Satoru
+    affiliation: The University of Tokyo
+    orcid: "https://orcid.org/0000-0001-8245-7925"
+version: 0.1.1
+date-released: 2026-10-18
+license: MIT
+repository-code: "https://github.com/nakamura196/cjk_index"
+keywords:
+  - full-text search
+  - CJK
+  - character bigram
+  - spelling variants
+  - Jekyll
+  - CollectionBuilder
