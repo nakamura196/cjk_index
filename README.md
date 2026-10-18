@@ -40,12 +40,16 @@ with the Chinese table as well.
 How this compares with Pagefind, kensaku, lunr.js, rroonga, tantiny and others:
 [docs/comparison.md](docs/comparison.md).
 Index size and query time on up to 16,951 works of Aozora Bunko:
-[bench/README.md](bench/README.md).
+[bench/README.md](bench/README.md). Retrieval quality against lunr.js:
+[bench/retrieval/](bench/retrieval/). Load and query times in Chrome and
+Safari: [bench/browser/](bench/browser/).
 
 When to use it, and when not to:
 
-- **Good fit:** catalogs, collection records or blog posts, up to about 20,000
-  records; static sites, command-line tools, scripts and small apps; anywhere
+- **Good fit:** catalogs, collection records or blog posts, from a few
+  thousand records up to the 16,951 we measured (19.3 MB gzipped at that size,
+  a heavy download on slow connections; above about 10,000 records, consider
+  splitting the index); static sites, command-line tools, scripts and small apps; anywhere
   you want nothing to install outside Ruby, or the same results in Ruby and
   the browser.
 - **Not a good fit (yet):** large amounts of full text, frequent updates, or
