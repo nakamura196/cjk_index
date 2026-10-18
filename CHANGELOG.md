@@ -15,6 +15,8 @@ cited in a paper.
 - README and docs/comparison.md: the recommended size is now the range we
   measured (up to 16,951 records), not "about 20,000".
 - CITATION.cff for citing the software.
+- CODE_OF_CONDUCT.md (Contributor Covenant 2.1), CONTRIBUTING.md, SECURITY.md,
+  issue forms and a pull request template.
 
 ## 0.1.0 (2026-10-02)
 

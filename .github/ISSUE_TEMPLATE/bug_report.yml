@@ -1,0 +1,45 @@
+name: Bug report
+description: Search returns wrong results, or something fails
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        日本語でも構いません。Security problems: please use the
+        [private report](https://github.com/nakamura196/cjk_index/security/advisories/new) instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The query, the record it should (or should not) find, and what you got.
+      placeholder: |
+        Query: 東京
+        Record text: 東京都立図書館所蔵
+        Expected: found / Got: not found
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - Ruby (Searcher)
+        - Browser (runtime)
+        - Both, with different results
+        - Building the index / Jekyll plugin
+    validations:
+      required: true
+  - type: textarea
+    id: normalize
+    attributes:
+      label: Output of CJKIndex.normalize (optional)
+      description: For the query and the record text, if you can run Ruby.
+      render: text
+  - type: input
+    id: env
+    attributes:
+      label: Versions
+      description: cjk_index, Ruby, and the browser if relevant.
+      placeholder: cjk_index 0.1.1, Ruby 3.3, Safari 27
+    validations:
+      required: true
