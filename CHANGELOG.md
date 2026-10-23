@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (0.2)
+## 0.2.0 (unreleased)
 
 - Filters: `Builder.new(filters:)` with `value` and `year` filters;
   `search(query, filter:)` in Ruby and `search(query, { filter })` in the
