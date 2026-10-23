@@ -21,9 +21,11 @@ module CJKIndex
     # Score multiplier for matches found by prefix or typo expansion.
     EXPANDED = 0.6
 
-    attr_reader :fields, :refs, :normalizer
+    attr_reader :fields, :normalizer
 
     # index is a Builder, its to_h, or the JSON it wrote (String or parsed).
+    # A Searcher made from a Builder answers for the builder's current
+    # documents, also after later add, remove and update.
     # prefix: the last Latin word of a query also matches longer words.
     # typos: Latin words of 5+ letters also match words one edit away.
     def self.load(path, **options)
@@ -31,13 +33,16 @@ module CJKIndex
     end
 
     def initialize(index, prefix: true, typos: true, normalizer: nil)
-      data = case index
-             when Builder then index.to_h
-             when String then JSON.parse(index)
-             else index
-             end
-      unless data.is_a?(Hash) && data["format"] == Builder::FORMAT
-        raise ArgumentError, "cjk_index: unsupported index format #{data.is_a?(Hash) ? data['format'].inspect : data.class}"
+      @prefix = prefix
+      @typos = typos
+      if index.is_a?(Builder)
+        @builder = index
+        data = index.live_data
+      else
+        data = index.is_a?(String) ? JSON.parse(index) : index
+        unless data.is_a?(Hash) && Builder::FORMATS.include?(data["format"])
+          raise ArgumentError, "cjk_index: unsupported index format #{data.is_a?(Hash) ? data['format'].inspect : data.class}"
+        end
       end
 
       @normalizer = normalizer || Normalizer.new(tables: data["variants"])
@@ -46,28 +51,43 @@ module CJKIndex
                              "but this normalizer folds with #{@normalizer.tables.inspect}; rebuild both together"
       end
 
-      @prefix = prefix
-      @typos = typos
-      @fields = data["fields"]
-      @boosts = data["boosts"]
-      @refs = data["refs"]
-      @lengths = data["lengths"]
-      @tokens = data["tokens"]
-      nf = @fields.length
-      avg = Array.new(nf, 0.0)
-      @lengths.each_with_index { |len, i| avg[i % nf] += len }
-      @avg_length = avg.map { |s| (v = s / [1, @refs.length].max).zero? ? 1 : v }
-      @latin_tokens = @tokens.keys.select { |t| latin?(t) }.sort
+      setup(data)
+    end
+
+    # Refs of the documents in the index, in index order.
+    def refs
+      refresh
+      @refs.compact
+    end
+
+    # Names of the filters the index was built with.
+    def filters
+      refresh
+      @filters.keys
     end
 
     # Every phrase of the query must occur in the document (in any field),
     # with its tokens adjacent and in order. Returns [{ ref:, score:, fields: }]
     # with the best match first; fields lists the fields that matched.
-    def search(query)
+    #
+    # filter: { "type" => "地図", "subject" => ["植物", "動物"], "date" => 1900..1950 }
+    # keeps the documents that meet every condition: a value filter matches
+    # any of the given values (folded like the query), a year filter takes a
+    # Range, { "min" => 1900, "max" => 1950 } or one year. Scores do not
+    # depend on the filter. With a filter, a blank query returns every
+    # document that passes it, in index order, with score 0.
+    def search(query, filter: nil)
+      refresh
       nf = @fields.length
-      n = @refs.length
+      n = @count
+      conditions = filter && compile_filter(filter)
       qp = Tokenizer.phrases(query, normalizer: @normalizer)
-      return [] if qp.empty?
+      if qp.empty?
+        return [] unless conditions
+
+        return @refs.each_index.select { |doc| @refs[doc] && pass?(doc, conditions) }
+                    .map { |doc| { ref: @refs[doc], score: 0.0, fields: [] } }
+      end
 
       scores = Hash.new(0.0)
       matched_fields = Hash.new { |h, k| h[k] = [] }
@@ -108,8 +128,32 @@ module CJKIndex
         end
       end
 
+      docs_so_far = docs_so_far.select { |doc| pass?(doc, conditions) } if conditions
       docs_so_far.sort_by { |doc| [-scores[doc], doc] }
                  .map { |doc| { ref: @refs[doc], score: scores[doc], fields: matched_fields[doc] } }
+    end
+
+    # Counts of the values of a filter, for a facet list: over results (as
+    # returned by search, or refs) or over the whole index. Returns
+    # [{ value:, count: }], the most frequent first, ties in index order.
+    # Year filters count each year.
+    def facets(field, results = nil)
+      refresh
+      filter = @filters.fetch(field.to_s) { raise ArgumentError, "cjk_index: no filter #{field}" }
+      docs = if results
+               results.filter_map { |r| @slot_of[r.is_a?(Hash) ? (r[:ref] || r["ref"]) : r.to_s] }
+             else
+               @refs.each_index.select { |doc| @refs[doc] }
+             end
+      counts = Hash.new(0)
+      docs.each do |doc|
+        value = filter[:docs][doc]
+        if filter[:kind] == "year" then counts[value] += 1 unless value.nil?
+        else value.each { |key| counts[key] += 1 }
+        end
+      end
+      counts.sort_by { |key, count| [-count, filter[:rank][key]] }
+            .map { |key, count| { value: filter[:display][key], count: count } }
     end
 
     def highlight(text, query) = CJKIndex.highlight(text, query, normalizer: @normalizer)
@@ -118,6 +162,74 @@ module CJKIndex
 
     private
 
+    def setup(data)
+      @version = @builder&.version
+      @fields = data["fields"]
+      @boosts = data["boosts"]
+      @refs = data["refs"]
+      @lengths = data["lengths"]
+      @tokens = data["tokens"]
+      @count = data["count"] || @refs.length
+      nf = @fields.length
+      avg = Array.new(nf, 0.0)
+      @lengths.each_with_index { |len, i| avg[i % nf] += len if len }
+      @avg_length = avg.map { |s| (v = s / [1, @count].max).zero? ? 1 : v }
+      @latin_tokens = @tokens.keys.select { |t| latin?(t) }.sort
+      @slot_of = {}
+      @refs.each_with_index { |ref, doc| @slot_of[ref] ||= doc if ref }
+      @filters = (data["filters"] || {}).to_h { |name, f| [name, setup_filter(f)] }
+    end
+
+    # Filter values by document: keys (value filters) or a year, with the
+    # form to show for each key and its rank of first appearance.
+    def setup_filter(f)
+      docs = if f["kind"] == "year" then f["docs"]
+             elsif f["values"]
+               keys = f["values"].map { |v| Builder.filter_key(v, @normalizer) }
+               f["docs"].map { |ids| ids.map { |id| keys[id] } }
+             else
+               f["docs"].map { |pairs| pairs&.map(&:first) }
+             end
+      display = {}
+      if f["values"] then f["values"].each { |v| display[Builder.filter_key(v, @normalizer)] ||= v }
+      elsif f["kind"] == "value" then f["docs"].each { |pairs| pairs&.each { |key, v| display[key] ||= v } }
+      end
+      rank = {}
+      docs.each_with_index do |value, doc|
+        next unless @refs[doc]
+
+        Array(value).each { |key| rank[key] ||= rank.size }
+      end
+      display = rank.keys.to_h { |year| [year, year] } if f["kind"] == "year"
+      { kind: f["kind"], docs: docs, display: display, rank: rank }
+    end
+
+    def refresh
+      setup(@builder.live_data) if @builder && @builder.version != @version
+    end
+
+    # [[filter, test], ...] from a filter argument of search.
+    def compile_filter(filter)
+      filter.filter_map do |name, condition|
+        f = @filters.fetch(name.to_s) { raise ArgumentError, "cjk_index: no filter #{name}" }
+        next if condition.nil? || (condition.is_a?(Array) && condition.empty?)
+
+        if f[:kind] == "year"
+          range = case condition
+                  when Range then condition
+                  when Hash then (condition["min"] || condition[:min])..(condition["max"] || condition[:max])
+                  else Integer(condition)..Integer(condition)
+                  end
+          [f, ->(year) { !year.nil? && range.cover?(year) }]
+        else
+          keys = Array(condition).map { |v| Builder.filter_key(v, @normalizer) }.to_set
+          [f, ->(values) { values.any? { |key| keys.include?(key) } }]
+        end
+      end
+    end
+
+    def pass?(doc, conditions) = conditions.all? { |f, test| test.call(f[:docs][doc]) }
+
     def latin?(token) = !token.match?(Tokenizer::CJK)
 
     # "doc * nf + field" => Set of positions, merged over the alternatives.
@@ -125,7 +237,7 @@ module CJKIndex
       nf = @fields.length
       map = {}
       tokens.each do |token|
-        postings = @tokens[token] or next
+        postings = @tokens.fetch(token, nil) or next
         i = 0
         while i < postings.length
           count = postings[i + 2]
