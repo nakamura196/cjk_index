@@ -1,1 +1,2 @@
 search-child-objects: false
+metadata-facets-fields: "type, creator"

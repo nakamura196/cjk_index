@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased (0.2)
+
+- Filters: `Builder.new(filters:)` with `value` and `year` filters;
+  `search(query, filter:)` in Ruby and `search(query, { filter })` in the
+  browser; a blank query with a filter lists every document that passes;
+  `facets(field, results)` counts values. Ruby and the browser give the same
+  results and counts.
+- Index updates: `Builder#remove`, `Builder#update`, `Builder.load`. The
+  changed index is the same as one rebuilt from scratch.
+- `Searcher.new(builder)` follows later changes to the builder (it used to
+  copy the index).
+- Index format `cjk_index/3` (adds `filters`). The browser script and
+  `Searcher` still read `cjk_index/2`.
+- Jekyll: `filters:` for an index; the CollectionBuilder preset filters on
+  `metadata-facets-fields` and the year of `date`.
+
 ## 0.1.1 (2026-10-18)
 
 No change to the library. This release fixes the state of the repository

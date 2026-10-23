@@ -31,6 +31,21 @@ class TestJekyll < Minitest::Test
       assert index["tokens"].key?("鳥瞰")
       refute index["tokens"].key?("非表示"), "description is not an index field"
       assert_equal %w[ja], index["variants"]
+      # metadata-facets-fields of the theme, and a year from the date column
+      assert_equal %w[type creator date], index["filters"].keys
+      assert_equal({ "kind" => "value", "values" => %w[地図 絵図], "docs" => [[0, 1], [1]], "separator" => ";" },
+                   index["filters"]["type"])
+      assert_equal [1900, nil], index["filters"]["date"]["docs"]
+    end
+  end
+
+  def test_filters_option
+    spec = { "name" => "items", "data" => "demo-metadata", "ref" => "objectid", "fields" => %w[title],
+             "filters" => { "type" => { "kind" => "value", "separator" => ";" } } }
+    build("cjk_index" => { "indexes" => [spec] }) do |dest|
+      index = JSON.parse(File.read(File.join(dest, "assets/cjk-index/items.json")))
+      assert_equal %w[item1 item2 child1], index["refs"]
+      assert_equal [[0, 1], [1], [0]], index["filters"]["type"]["docs"]
     end
   end
 

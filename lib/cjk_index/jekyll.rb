@@ -19,6 +19,10 @@ module CJKIndex
   #         data: metadata                # ...rows of _data/metadata.csv
   #         ref: objectid                 # column used as the result's ref
   #         fields: [title, creator, subject]
+  #         filters:                      # fields to filter on (optional)
+  #           type: value
+  #           subject: { kind: value, separator: ";" }
+  #           date: year
   #       - name: search
   #         preset: collectionbuilder     # reads CollectionBuilder's own config
   #
@@ -70,7 +74,7 @@ module CJKIndex
         raise ::Jekyll::Errors::FatalException, "cjk_index: unknown preset #{spec['preset']}" if spec["preset"]
 
         builder = Builder.new(fields: Array(spec.fetch("fields")), boosts: spec.fetch("boosts", {}),
-                              normalizer: normalizer)
+                              normalizer: normalizer, filters: spec.fetch("filters", {}))
         if spec["collection"]
           docs = site.collections.fetch(spec["collection"]) do
             raise ::Jekyll::Errors::FatalException, "cjk_index: no collection #{spec['collection']}"
@@ -97,6 +101,9 @@ module CJKIndex
       # items with an objectid, child objects only when the theme asks for them,
       # fields marked index=true in _data/config-search.csv, and the same "id"
       # values, so results can be looked up in the existing search store.
+      # Filters default to the theme's metadata-facets-fields (values
+      # separated by ";", as CollectionBuilder writes them) and a year from
+      # the date column.
       module CollectionBuilder
         module_function
 
@@ -107,7 +114,8 @@ module CJKIndex
                    .select { |f| f["index"].to_s == "true" }
                    .map { |f| f["field"] }
           boosts = spec.fetch("boosts") { fields.first ? { fields.first => 3 } : {} }
-          builder = Builder.new(fields: fields, boosts: boosts, normalizer: normalizer)
+          builder = Builder.new(fields: fields, boosts: boosts, normalizer: normalizer,
+                                filters: spec.fetch("filters") { default_filters(site, rows) })
           rows.each do |row|
             next if row["objectid"].to_s.empty?
             next if !row["parentid"].to_s.empty? && !children
@@ -115,6 +123,13 @@ module CJKIndex
             builder.add(ref_for(row), row.to_h { |k, v| [k, v.is_a?(String) ? v.split.join(" ") : v] })
           end
           builder
+        end
+
+        def default_filters(site, rows)
+          facets = site.data.dig("theme", "metadata-facets-fields").to_s.split(",").map(&:strip).reject(&:empty?)
+          filters = facets.to_h { |f| [f, { "kind" => "value", "separator" => ";" }] }
+          filters["date"] = "year" if rows.any? { |row| row.key?("date") } && !filters.key?("date")
+          filters
         end
 
         def ref_for(row)

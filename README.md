@@ -91,6 +91,41 @@ Matching, BM25 ranking, highlighting and excerpts follow the browser script
 step for step. The test suite runs both on the same index and checks that
 refs, scores, matched fields, highlights and excerpts are identical.
 
+### Filters
+
+Fields to filter on are given when the index is built. A `value` filter
+matches whole values, folded like the query (地圖 matches 地図); a `year`
+filter keeps the first four-digit number of a value (`1900-01-01`,
+`１９３１年`; era dates such as 明治33年 give no year).
+
+```ruby
+builder = CJKIndex::Builder.new(fields: %w[title], filters: {
+  "type" => "value", "subject" => { "kind" => "value", "separator" => ";" }, "date" => "year"
+})
+builder.add("item1.html", "title" => "…鳥瞰圖", "type" => "地図", "subject" => "建物;農学部", "date" => "1900")
+
+searcher.search("鳥瞰図", filter: { "type" => "地図", "date" => 1890..1910 })
+searcher.search("", filter: { "subject" => %w[建物 植物] })  # no query: every item that passes
+searcher.facets("type", results)  # => [{ value: "地図", count: 12 }, ...]
+```
+
+Conditions on different fields must all hold; a list matches any of its
+values. A filter only removes results: the scores of the others do not change.
+
+### Updating an index
+
+```ruby
+builder.update("item1.html", "title" => "…", "type" => "写真")  # in place, or added if new
+builder.remove("item2.html")
+
+builder = CJKIndex::Builder.load(File.read("search.json"))    # change a written index
+```
+
+After any changes, `to_h` is the same as for an index built from scratch
+with the remaining documents in the same order (the test suite checks this
+on random sequences of changes). A `Searcher` made from a `Builder` answers
+for its current documents.
+
 ### Without Jekyll
 
 [examples/search_csv.rb](examples/search_csv.rb) searches a CSV catalog from
@@ -116,6 +151,9 @@ agri_6d032fb5        東京[帝國大學]農學部建物位置圖
     index.search("鳥瞰図");  // => [{ ref: "item1.html", score: ..., fields: ["title"] }]
     CJKIndex.highlight("東京帝國大學", "帝国大学"); // => "東京<mark>帝國大學</mark>"
     CJKIndex.excerpt(longText, "鳥瞰図", 80);    // highlighted window around the first match
+
+    var results = index.search("鳥瞰図", { filter: { type: "地図", date: { min: 1890, max: 1910 } } });
+    index.facets("type", results);              // => [{ value: "地図", count: 12 }, ...]
   });
 </script>
 ```
@@ -143,6 +181,10 @@ cjk_index:
       data: metadata              # rows of _data/metadata.csv
       ref: objectid
       fields: [title, creator, subject]
+      filters:                    # optional
+        type: value
+        subject: { kind: value, separator: ";" }
+        date: year
 ```
 
 The runtime is written to `assets/cjk-index/cjk-index.js`.
@@ -159,7 +201,9 @@ cjk_index:
 The preset follows CollectionBuilder's own search settings: fields with
 `index: true` in `_data/config-search.csv`, and child objects only when
 `search-child-objects` is on. Result refs are the same `id` values as in
-`assets/js/lunr-store.js`. A working example:
+`assets/js/lunr-store.js`. Filters default to the theme's
+`metadata-facets-fields` (values separated by `;`) and a year from the `date`
+column; set `filters:` to change them. A working example:
 https://github.com/nakamura196/cb-ja-demo
 
 ## Variant tables
@@ -177,9 +221,9 @@ it is opt-in.
 ## Status
 
 0.1, early. On RubyGems: `gem install cjk_index`
-(https://rubygems.org/gems/cjk_index). Planned: filters and incremental index
-updates, index sharding for large sites (see the [benchmarks](bench/README.md)),
-a Bridgetown adapter and a CLI.
+(https://rubygems.org/gems/cjk_index). Filters and index updates are on the
+main branch for 0.2. Planned: index sharding for large sites (see the
+[benchmarks](bench/README.md)), a Bridgetown adapter and a CLI.
 
 ## Development
 
