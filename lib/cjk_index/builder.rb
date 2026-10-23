@@ -72,7 +72,6 @@ module CJKIndex
       @postings = Hash.new { |h, k| h[k] = [] }
       @slots = Hash.new { |h, k| h[k] = [] }
       @count = 0
-      @changed = false
       @version = 0
     end
 
@@ -117,7 +116,7 @@ module CJKIndex
     end
 
     # Refs of the documents in the index, in index order.
-    def refs = @changed ? @refs.compact : @refs
+    def refs = holes? ? @refs.compact : @refs
 
     def size = @count
 
@@ -156,7 +155,7 @@ module CJKIndex
     end
 
     def to_h
-      live = @refs.each_index.reject { |slot| @refs[slot].nil? }
+      live = holes? ? @refs.each_index.reject { |slot| @refs[slot].nil? } : @refs.each_index.to_a
       h = {
         "format" => FORMAT,
         "variants" => @normalizer.tables,
@@ -164,7 +163,7 @@ module CJKIndex
         "boosts" => @boosts.map { |b| b == b.to_i ? b.to_i : b },
         "refs" => live.map { |slot| @refs[slot] },
         "lengths" => live.flat_map { |slot| @lengths[slot * @fields.length, @fields.length] },
-        "tokens" => @changed ? renumbered_postings(live) : @postings.sort.to_h
+        "tokens" => holes? ? renumbered_postings(live) : @postings.sort.to_h
       }
       h["filters"] = @filters.to_h { |name, spec| [name, filter_to_h(name, spec, live)] } unless @filters.empty?
       h
@@ -188,6 +187,7 @@ module CJKIndex
     private
 
     def index(slot, doc)
+      in_place = slot < @refs.length - 1
       tokens = []
       @fields.each_with_index do |field, field_index|
         positions = Hash.new { |h, k| h[k] = [] }
@@ -199,7 +199,13 @@ module CJKIndex
           base += @normalizer.normalize(text).length + VALUE_GAP
         end
         @lengths[(slot * @fields.length) + field_index] = [base - VALUE_GAP, 0].max
-        positions.each { |token, offsets| @postings[token].push(slot, field_index, offsets.length, *offsets) }
+        positions.each do |token, offsets|
+          postings = @postings[token]
+          # A document replaced in place goes before the later slots, so that
+          # every list stays in the order a fresh build writes.
+          at = in_place ? insertion_point(postings, slot, field_index) : postings.length
+          postings.insert(at, slot, field_index, offsets.length, *offsets)
+        end
         tokens.concat(positions.keys)
       end
       @doc_tokens[slot] = tokens.uniq
@@ -222,7 +228,6 @@ module CJKIndex
         end
       end
       @doc_tokens[slot] = nil
-      @changed = true
       @version += 1
     end
 
@@ -259,19 +264,31 @@ module CJKIndex
       { "kind" => "value", "values" => values, "docs" => docs }.merge(spec.slice("separator"))
     end
 
-    # Postings with removed slots dropped and slots renumbered, in the order a
-    # fresh build writes them (by document, then field).
+    def holes? = @count < @refs.length
+
+    # Where an entry for slot and field goes in a list ordered by slot, then field.
+    def insertion_point(postings, slot, field_index)
+      i = 0
+      while i < postings.length && (postings[i] < slot || (postings[i] == slot && postings[i + 1] < field_index))
+        i += 3 + postings[i + 2]
+      end
+      i
+    end
+
+    # Postings with slots renumbered to positions among the live documents.
+    # Removed slots appear in no list any more, and renumbering keeps the
+    # order, so sorted lists stay sorted.
     def renumbered_postings(live)
-      number = live.each_with_index.to_h
+      number = []
+      live.each_with_index { |slot, doc| number[slot] = doc }
       @postings.sort.to_h do |token, postings|
-        entries = []
+        postings = postings.dup
         i = 0
         while i < postings.length
-          n = 3 + postings[i + 2]
-          entries << [number.fetch(postings[i]), postings[i + 1], postings[(i + 2)...(i + n)]]
-          i += n
+          postings[i] = number[postings[i]]
+          i += 3 + postings[i + 2]
         end
-        [token, entries.sort_by { |doc, field, _| [doc, field] }.flat_map { |doc, field, rest| [doc, field, *rest] }]
+        [token, postings]
       end
     end
 

@@ -136,3 +136,43 @@ first 200 characters), MacBook, Ruby 4.0.1:
 
 Not checked yet: the browser side with a real site (cb-ja-demo on a branch),
 memory use of the builder with token lists kept per document.
+
+## 2026-10-22: writing an updated index
+
+`to_json` after changes took 6.4 s, against 0.7 s for a fresh build
+(`to_h` 0.5 s, `JSON.generate` 0.2 s). Timing the parts on the Aozora
+catalog showed where the time went: the old `to_h` cut every posting list
+into entries, renumbered them and sorted them again, even after a single
+update.
+
+First attempt: remember which tokens an update touched and sort only those
+lists in `to_h`. Renumbering after a remove became a plain pass over the
+document numbers (the numbering keeps the order, so sorted lists stay
+sorted). `to_h` after a remove went from 3.8 s to 1.3 s, but after one
+update it was still 3.1 s: an update touches common unigrams (の, に, …),
+whose lists cover most documents, and sorting those is the slow part.
+Rejected for that reason.
+
+Kept: `update` inserts the new entries at their place in each list instead of
+appending them, so the lists are always in the order a fresh build writes and
+`to_h` never sorts entries. Finding the place walks the list once, as
+removing the old entries already does.
+
+`bench/updates.rb`, old and new code back to back on the same machine
+(16,951 records):
+
+| step | before | after |
+|---|---:|---:|
+| update one record | 126 ms | 122 ms |
+| later updates after load | 110 ms | 115 ms |
+| `to_json` after updates | 10.08 s | 0.62 s |
+| `to_json` after a remove as well | 11.45 s | 1.23 s |
+
+Times vary between runs (the full build took 8.8 s here, 11.0 s in the
+earlier entry, where `to_json` took 6.4 s); compare within one run.
+
+- Writing after updates now costs the same as writing a fresh index. With a
+  remove, renumbering still walks every list once (about 0.6 s).
+- The rebuild-equality test catches the fault: with insertion turned off
+  (always append), it fails.
+- Updates cost no more than before; the extra walk is within the noise.

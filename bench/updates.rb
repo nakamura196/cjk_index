@@ -76,7 +76,9 @@ puts format("first update after load (scans postings once): %.2f s",
             time { loaded.update(sample[0], changed.(sample[0])) })
 puts format("later updates after load: %.1f ms",
             median(sample.drop(1).map { |ref| time { loaded.update(ref, changed.(ref)) } }) * 1000)
-puts format("write the index again (to_json): %.2f s", time { loaded.to_json })
+puts format("write the index again after updates (to_json): %.2f s", time { loaded.to_json })
+loaded.remove(sample[0])
+puts format("write the index again after a remove (to_json): %.2f s", time { loaded.to_json })
 
 searcher = CJKIndex::Searcher.new(filtered)
 searcher.search("東京")
