@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest a feature or a new folding table
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: 日本語でも構いません。
+  - type: textarea
+    id: usecase
+    attributes:
+      label: Use case
+      description: What collection or site, and what searchers need to find.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: For a new variant table, a few example pairs help (e.g. 證 → 証).

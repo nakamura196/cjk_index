@@ -188,6 +188,9 @@ bundle install
 bundle exec rake test   # the runtime tests need node
 ```
 
+Bug reports and pull requests: see [CONTRIBUTING.md](CONTRIBUTING.md).
+Security problems: [SECURITY.md](SECURITY.md).
+
 ## License
 
 MIT
