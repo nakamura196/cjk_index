@@ -486,3 +486,24 @@ one process):
   writes new segments and merges them). It would make each update cheap, but
   readers would have to replay the log and the browser could no longer read
   the file as it is. Reconsider if someone needs frequent single updates.
+
+## 2026-10-23: Windows (CI)
+
+The first CI run on `windows-latest` (Ruby 4.0) failed in the test with
+three readers searching during ten updates: `Errno::EACCES` on the rename,
+still after 50 retries (0.5 s).
+
+- Windows cannot rename a file over one that another handle has open.
+  Readers opened the file on every check to take its stamp, so with
+  readers searching all the time the file was nearly always open.
+- Moving the check to `File.stat` was not enough at first: on Windows
+  `File.stat(path)` and the stat of an open file give different values
+  (Ruby 4.0.7), so the stamps never matched and readers still opened the
+  file every time. All stamps now come from `File.stat`; a reader opens the
+  file only when it has changed.
+- The rename and that open are retried for up to 5 s.
+- With these, all 59 tests pass on Windows, Linux (Ruby 3.1–4.0) and macOS
+  (runs 40069227981 failed, 40069349382 failed, 40069470693 passed).
+- Not tested on Windows: the two tests that need `fork` (processes
+  updating at once, a killed writer) are skipped there. Threads updating at
+  once and readers during updates do run.
