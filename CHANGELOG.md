@@ -11,6 +11,11 @@
   changed index is the same as one rebuilt from scratch.
 - `Searcher.new(builder)` follows later changes to the builder (it used to
   copy the index).
+- `IndexFile`: an index file shared by several processes (e.g. Rails
+  workers). Updates take a lock and are written with a rename, so none is
+  lost and readers never see a partly written file; readers load the file
+  again when it changes. A killed writer leaves the old index intact;
+  `lock_timeout:` bounds the wait for another writer.
 - Index format `cjk_index/3` (adds `filters`). The browser script and
   `Searcher` still read `cjk_index/2`.
 - Jekyll: `filters:` for an index; the CollectionBuilder preset filters on

@@ -340,3 +340,149 @@ The entries above that say "not committed" are now on branch `cjk-index-0.2`
 of cb-ja-demo: 3f41aba (search page facets and the shared include), 5bcfd75
 (browse page), e5b6b39 (Gemfile pointing at this worktree; trial only, to be
 replaced with the released gem before it goes to main).
+
+## 2026-10-23: an index file shared by processes
+
+The mentor asked whether updates work when a Rails app runs several
+processes. They did not: each process held its own copy in memory, an update
+in one was invisible to the others, and two processes writing the file could
+overwrite each other's changes.
+
+How two engines handle it:
+
+- Groonga shares one database between threads and processes. Reads take no
+  lock ("read lock-free data structures"), and searches run while another
+  process updates. Writers take a lock on the database, table or column; a
+  lock left by a crashed process has to be cleared (`lock_clear`).
+  https://groonga.org/docs/characteristic.html,
+  https://groonga.org/docs/reference/commands/lock_clear.html,
+  https://groonga.org/docs/reference/command/return_codes/grn_resource_deadlock_avoided.html
+- Lucene allows one `IndexWriter` per directory (a `write.lock` file).
+  Readers search a point-in-time snapshot and see changes only when they
+  open the index again.
+  https://lucene.apache.org/core/9_0_0/core/org/apache/lucene/index/IndexWriter.html
+
+cjk_index keeps the index in Ruby objects, and processes cannot share them;
+the file is one JSON document. So the Groonga model (one copy, updated in
+place, read by all) is out of reach without a different file format. Within
+one process the Builder already updates in place; between processes the
+Lucene model fits: one writer at a time, snapshots for readers.
+
+Kept: `CJKIndex::IndexFile`.
+
+- `update { |builder| ... }` takes `flock` on `<path>.lock`, reads the file,
+  runs the block, writes to a temporary file in the same directory (fsync)
+  and renames it over the file. The lock covers the whole read–change–write,
+  so no update is lost. `flock` is released by the OS when a process dies,
+  so a crash leaves no lock behind (unlike a lock recorded in the file).
+- A writer keeps its Builder and reads the file again only if someone else
+  wrote it since (compared by inode, device, size and mtime).
+- `searcher` stats the file (or once per `interval:` seconds) and loads it
+  again when it changed. While one thread loads, the other threads keep
+  using the old Searcher. The stamp is taken from the open file handle, so it
+  always belongs to the content that was read.
+- If the block raises, nothing is written and the Builder is dropped.
+
+Tests (test/test_index_file.rb, 10): a reader sees another instance's
+update; the writer sees its own at once even with a long interval; the
+updated file equals a rebuild; 4 threads and 4 forked processes × 5 updates
+lose none; 3 reader threads searching during 10 updates of a 300-record index
+never fail to parse. Checked that the tests catch faults: without `flock` the
+process test fails every time (fewer than 20 records); writing the file in
+place instead of renaming makes readers hit `JSON::ParserError` every time.
+
+`bench/index_file.rb` on the Aozora catalog (16,951 records, three filters,
+61.2 MB file), MacBook, Ruby 4.0.1:
+
+| step | time |
+|---|---:|
+| write a full build (to_json, fsync, rename) | 0.59 s |
+| first searcher in a process (load) | 0.72 s |
+| searcher, file unchanged (one stat) | 0.086 ms |
+| first update in a process (load, update, write) | 2.19 s |
+| later updates from the same process | 0.57 s |
+| 5 updates in one block | 1.05 s |
+| update after another process wrote (load again) | 2.05 s |
+| searcher after the file changed (load again) | 0.58 s |
+
+- Checking for changes on every search costs nothing next to a search
+  (2.3 ms for 東京 in the earlier entry), so `interval:` defaults to 0.
+- An update costs about 0.6 s, almost all of it writing the 61 MB file. For
+  records that change often, a job that gathers changes and updates once is
+  cheaper than one update per record.
+- Each process holds the whole index; while reloading it briefly holds two.
+
+Rejected:
+
+- Each process writing the file without a lock: last writer wins, earlier
+  updates are lost (the fork test shows it).
+- Notifying the other processes (signals, a pub/sub channel): needs
+  something outside Ruby's standard library or knowledge of the server; a
+  stat per search is enough.
+- Appending changes to a log next to the index and replaying it in readers:
+  would make updates cheap, but readers would need the Builder's update
+  logic and the file would no longer be the format the browser reads. Worth
+  reconsidering if the 0.6 s per update matters to someone.
+
+Not checked: Windows (rename over a file that a reader has open is retried;
+CI will show whether that is enough), NFS (flock is unreliable there; the
+README says to use a local disk), and a real Rails app with Puma workers.
+
+## 2026-10-23: crashes, a hung writer, and the cost of rewriting the file
+
+Two open questions from the entry above, answered here rather than left to
+the mentor.
+
+Does a crash leave a lock, as in Groonga? Groonga treats a lock left over
+after a crash as a sign that the object may be broken, because the lock is
+held while the object is changed in place: `grndb recover` finds broken
+objects by remaining locks, and its manual says to truncate and load the
+data again rather than only clear the lock
+(https://groonga.org/docs/reference/executables/grndb.html). Groonga 11.0.6
+added automatic recovery, which does not cover every case
+(https://groonga.org/en/blog/2021/08/29/groonga-11.0.6.html). `IndexFile`
+never changes the file in place, so this cannot happen. Tested by killing a
+writer (SIGKILL) while its temporary file existed, with 2,000 records: the
+index parsed with all 2,000 records, the next writer got the lock at once,
+and the left temporary file was removed by it. The test passed 5 of 5 runs.
+
+What a crash does not cover, and what was added for it:
+
+- A writer that hangs while holding the lock (flock is released only when
+  the process ends). Groonga gives up on a lock after about 3 hours by
+  default (`GRN_LOCK_TIMEOUT`). `IndexFile` now waits at most
+  `lock_timeout:` seconds (default 60) and raises `LockTimeout`. Tested with
+  a thread holding the lock.
+- Temporary files left by a killed writer. They are made only while the lock
+  is held, so the next writer deletes any it finds.
+- Power loss after the rename. A rename is atomic but becomes durable only
+  when the directory is synced too (ext4, xfs); PostgreSQL's
+  `durable_rename` does the same
+  (https://postgresql.org/message-id/565E14D9.6050805%40gmx.net). `IndexFile`
+  now fsyncs the directory after the rename; on Windows, which cannot open a
+  directory, it skips this. Not tested (needs a power cut).
+
+Is rewriting the whole file on each update acceptable? Update time by index
+size, Aozora catalog records, MacBook, Ruby 4.0.1 (median of 5 updates from
+one process):
+
+| records | file | update | of which to_json |
+|---:|---:|---:|---:|
+| 1,000 | 3.6 MB | 0.08 s | 0.08 s |
+| 5,000 | 17.9 MB | 0.24 s | 0.24 s |
+| 10,000 | 35.5 MB | 0.48 s | 0.39 s |
+| 16,951 | 61.2 MB | 0.71 s | 0.57 s |
+
+- The cost is linear in the size and almost all of it is generating the
+  JSON. At the 20,000-record end of the target, about 1.4 updates per second
+  can be written, one after another.
+- That is enough for a catalog that staff edit by hand. It is not enough for
+  an import that updates records one by one: 10,000 single updates would
+  take 1–2 hours. In one block they still cost about 0.1 s each in the
+  Builder (earlier entry), about 17 minutes; a full build and `write` takes
+  about 11 s. The README says: a few changes in one block, an import as a
+  full build.
+- Rejected for now: a change log next to the index, merged later (as Lucene
+  writes new segments and merges them). It would make each update cheap, but
+  readers would have to replay the log and the browser could no longer read
+  the file as it is. Reconsider if someone needs frequent single updates.
