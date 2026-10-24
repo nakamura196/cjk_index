@@ -75,10 +75,8 @@ module CJKIndex
     def update
       @write_mutex.synchronize do
         lock do
-          File.open(@path, "r:UTF-8") do |f|
-            stamp = stamp(f.stat)
-            @builder = Builder.load(f.read) unless @builder && stamp == @builder_stamp
-          end
+          # The lock is held, so the file cannot change between stat and read.
+          @builder = Builder.load(File.read(@path, encoding: "UTF-8")) unless @builder && stamp == @builder_stamp
           done = false
           begin
             yield @builder
@@ -112,8 +110,12 @@ module CJKIndex
     def due? = @checked_at.nil? || now - @checked_at >= @interval
 
     # What identifies one written version of the file. rename gives the new
-    # file a new inode; mtime and size cover systems without inodes.
-    def stamp(stat) = [stat.ino, stat.dev, stat.size, stat.mtime.to_r]
+    # file a new inode; mtime and size cover systems without inodes. Always
+    # from File.stat: on Windows the stat of an open file differs from it.
+    def stamp
+      stat = File.stat(@path)
+      [stat.ino, stat.dev, stat.size, stat.mtime.to_r]
+    end
 
     def reload
       return unless due?
@@ -121,15 +123,13 @@ module CJKIndex
       @checked_at = now
       # stat does not keep the file open; on Windows an open file cannot be
       # renamed over, so open it only when it has changed.
-      return if @searcher && stamp(File.stat(@path)) == @searcher_stamp
+      current = stamp
+      return if @searcher && current == @searcher_stamp
 
-      windows_retry do
-        File.open(@path, "r:UTF-8") do |f|
-          stamp = stamp(f.stat)
-          @searcher = Searcher.new(f.read, **@options)
-          @searcher_stamp = stamp
-        end
-      end
+      # If a writer renames between stat and read, this reads the newer file
+      # under the older stamp, and the next check loads it once more.
+      @searcher = Searcher.new(windows_retry { File.read(@path, encoding: "UTF-8") }, **@options)
+      @searcher_stamp = current
     end
 
     # Waits for the lock for at most lock_timeout seconds, so that a writer
@@ -168,7 +168,7 @@ module CJKIndex
       end
       windows_retry { File.rename(tmp, @path) }
       sync_dir
-      stamp(File.stat(@path))
+      stamp
     ensure
       File.delete(tmp) if tmp && File.exist?(tmp)
     end
