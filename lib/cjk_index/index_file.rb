@@ -119,12 +119,16 @@ module CJKIndex
       return unless due?
 
       @checked_at = now
-      File.open(@path, "r:UTF-8") do |f|
-        stamp = stamp(f.stat)
-        next if @searcher && stamp == @searcher_stamp
+      # stat does not keep the file open; on Windows an open file cannot be
+      # renamed over, so open it only when it has changed.
+      return if @searcher && stamp(File.stat(@path)) == @searcher_stamp
 
-        @searcher = Searcher.new(f.read, **@options)
-        @searcher_stamp = stamp
+      windows_retry do
+        File.open(@path, "r:UTF-8") do |f|
+          stamp = stamp(f.stat)
+          @searcher = Searcher.new(f.read, **@options)
+          @searcher_stamp = stamp
+        end
       end
     end
 
@@ -162,7 +166,7 @@ module CJKIndex
         f.flush
         f.fsync
       end
-      rename(tmp, @path)
+      windows_retry { File.rename(tmp, @path) }
       sync_dir
       stamp(File.stat(@path))
     ensure
@@ -177,14 +181,15 @@ module CJKIndex
       nil
     end
 
-    # On Windows, renaming over a file fails while a reader has it open;
-    # readers hold it only for a moment, so try again.
-    def rename(from, to)
-      tries = 0
+    # On Windows, renaming over a file fails while a reader has it open, and
+    # opening it can fail while it is being replaced. Both last only a
+    # moment, so try again for up to 5 s.
+    def windows_retry
+      deadline = now + 5
       begin
-        File.rename(from, to)
+        yield
       rescue Errno::EACCES, Errno::EPERM
-        raise if (tries += 1) > 50
+        raise if now >= deadline
 
         sleep 0.01
         retry

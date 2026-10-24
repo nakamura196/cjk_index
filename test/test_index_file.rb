@@ -155,6 +155,9 @@ class TestIndexFile < Minitest::Test
 
     assert_empty errors
     assert_equal 310, writer.searcher.search("帝国").length
+  ensure
+    stop = true
+    readers&.each(&:join)
   end
 
   def test_a_writer_that_hangs_times_out_the_others
