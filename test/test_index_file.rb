@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require "rbconfig"
 require "tmpdir"
 
 # An index file shared by several readers and writers: no update is lost, and
@@ -24,6 +25,15 @@ class TestIndexFile < Minitest::Test
   end
 
   def refs_in_file = JSON.parse(File.read(@path))["refs"]
+
+  # Starts test/support/index_file_writer.rb in a new process. Process.spawn
+  # rather than fork, so that these tests run on Windows too.
+  def spawn_writer(mode, *args)
+    Process.spawn(RbConfig.ruby, "-I", File.expand_path("../lib", __dir__),
+                  File.expand_path("support/index_file_writer.rb", __dir__), mode, @path, *args)
+  end
+
+  def tmp_file? = Dir.children(@dir).any? { |n| n.end_with?(".tmp") }
 
   def test_searcher_sees_updates_from_another_instance
     CJKIndex::IndexFile.new(@path).write(builder("a" => { "title" => "東京帝國大學" }))
@@ -114,16 +124,8 @@ class TestIndexFile < Minitest::Test
   end
 
   def test_processes_update_without_losing_any
-    skip "needs fork" unless Process.respond_to?(:fork)
-
     CJKIndex::IndexFile.new(@path).write(builder)
-    pids = 4.times.map do |p|
-      fork do
-        file = CJKIndex::IndexFile.new(@path)
-        5.times { |i| file.update { |b| b.add("p#{p}-#{i}", "title" => "資料 #{p} #{i}") } }
-        exit!(0)
-      end
-    end
+    pids = 4.times.map { |p| spawn_writer("add", "p#{p}", "5") }
     statuses = pids.map { |pid| Process.wait2(pid).last }
 
     assert(statuses.all?(&:success?))
@@ -176,21 +178,21 @@ class TestIndexFile < Minitest::Test
   end
 
   def test_a_killed_writer_leaves_the_index_intact
-    skip "needs fork" unless Process.respond_to?(:fork)
-
     docs = 2000.times.to_h { |i| ["d#{i}", { "title" => "東京帝國大學 資料 #{i} " * 5 }] }
     CJKIndex::IndexFile.new(@path).write(builder(docs))
-    pid = fork do
-      file = CJKIndex::IndexFile.new(@path)
-      loop { file.update { |b| b.update("d0", "title" => "改訂 #{rand}") } }
+    # The temporary file exists only while the writer writes it, so the kill
+    # can come just after; then try again.
+    killed_while_writing = 5.times.any? do
+      pid = spawn_writer("loop")
+      # a new Ruby process takes a moment to start, longer on Windows
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 30
+      sleep 0.001 until tmp_file? || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+      Process.kill(:KILL, pid)
+      Process.wait(pid)
+      tmp_file?
     end
-    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 10
-    sleep 0.001 until Dir.children(@dir).any? { |n| n.end_with?(".tmp") } ||
-                      Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
-    Process.kill(:KILL, pid)
-    Process.wait(pid)
 
-    skip "the writer was not killed while writing; run again" unless Dir.children(@dir).any? { |n| n.end_with?(".tmp") }
+    skip "the writer was not killed while writing; run again" unless killed_while_writing
 
     after = JSON.parse(File.read(@path)) # the old index or a later one, never a partial file
 
