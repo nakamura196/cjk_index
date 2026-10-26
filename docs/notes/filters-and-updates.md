@@ -507,3 +507,22 @@ still after 50 retries (0.5 s).
 - Not tested on Windows: the two tests that need `fork` (processes
   updating at once, a killed writer) are skipped there. Threads updating at
   once and readers during updates do run.
+
+## 2026-10-25: the process tests on Windows
+
+The two tests that used `fork` (four processes × five updates at once; a
+writer killed while it writes) now start a separate Ruby process with
+`Process.spawn` (`test/support/index_file_writer.rb`), so they run on
+Windows too. This closes the "Not tested on Windows" point of the
+previous entry.
+
+- The kill test missed the moment in 4 of 15 local runs (macOS): the
+  temporary file exists only while the writer writes it, and the kill
+  could come just after the rename. It was then skipped. It now tries up to
+  5 times; 15 of 15 local runs then did the check.
+- On Windows, `Process.kill(:KILL, pid)` ends the writer; the lock is
+  released and the next writer removes its temporary file, as on Linux.
+- CI run 40252891096: Windows (Ruby 4.0) 59 runs, 0 failures, 0 skips;
+  macOS and Ubuntu (Ruby 3.3, 3.4, 4.0) pass. Ruby 3.1 failed before the
+  tests: `ubuntu-latest` is now Ubuntu 26.04, and setup-ruby has no Ruby
+  3.1.7 build for it (HTTP 404). Not related to this change.
