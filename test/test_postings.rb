@@ -13,7 +13,7 @@ class TestPostings < Minitest::Test
     assert_equal 2, P.number(1799).length
     assert_equal 3, P.number(53_999).length
     assert_equal 4, P.number(54_000).length
-    refute_match(/["\\\\]/, P::ALPHABET)
+    refute_match(/["\\]/, P::ALPHABET)
     assert_equal 90, P::ALPHABET.length
   end
 

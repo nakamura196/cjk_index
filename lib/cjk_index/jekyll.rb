@@ -74,7 +74,7 @@ module CJKIndex
                            .map { |name, content| GeneratedFile.new(site, dir, name, content) }
             site.static_files.concat(files)
             ::Jekyll.logger.info "cjk_index:", "#{dir}/#{Builder::MANIFEST} (#{builder.refs.length} documents, " \
-                                               "#{files.length - 1} shards)"
+                                               "#{files.length - 2} shards)"
           else
             name = "#{spec.fetch('name')}.json"
             site.static_files << GeneratedFile.new(site, output, name, builder.to_json)

@@ -84,7 +84,7 @@ class TestJekyll < Minitest::Test
       manifest = JSON.parse(File.read(File.join(dir, "index.json")))
       assert_equal %w[item1 item2 child1], manifest["refs"]
       assert_operator manifest["shards"].length, :>, 1
-      assert_equal manifest["shards"].map(&:last).sort, (Dir.children(dir) - ["index.json"]).sort
+      assert_equal((manifest["shards"].map(&:last) + [manifest["latin"]]).sort, (Dir.children(dir) - ["index.json"]).sort)
       refute File.exist?(File.join(dest, "assets/cjk-index/items.json"))
       assert_equal %w[item1], CJKIndex::Searcher.load(dir).search("鳥瞰").map { |r| r[:ref] }
     end

@@ -69,8 +69,9 @@ class TestSplit < Minitest::Test
       assert_equal "cjk_index/4", data["format"]
       refute data.key?("tokens")
       assert_operator data["shards"].length, :>, 20
-      assert_equal data["shards"].map(&:last).sort, (Dir.children(dir) - ["index.json"]).sort
-      assert_equal b.to_h["tokens"].keys.reject { |t| t.match?(CJKIndex::Tokenizer::CJK) }.sort, data["latin"]
+      assert_equal((data["shards"].map(&:last) + [data["latin"]]).sort, (Dir.children(dir) - ["index.json"]).sort)
+      assert_equal b.to_h["tokens"].keys.reject { |t| t.match?(CJKIndex::Tokenizer::CJK) }.sort,
+                   JSON.parse(File.read(File.join(dir, data["latin"])))
       assert_equal b.to_h, CJKIndex::Builder.read(dir).to_h
       assert_equal b.to_h, CJKIndex::Builder.read(manifest).to_h
       assert_raises(ArgumentError) { CJKIndex::Builder.load(data) }
@@ -84,6 +85,8 @@ class TestSplit < Minitest::Test
       })
       lazy.search("鳥瞰図")
       assert_equal 2, loaded.uniq.length, "鳥瞰 and 瞰図 only"
+      lazy.search("manif")
+      assert_includes loaded, data["latin"]
     end
   end
 
@@ -96,7 +99,8 @@ class TestSplit < Minitest::Test
       b.remove("astral") # the last document: no later document is renumbered
       b.write_split(dir, shard_size: 200)
       data = JSON.parse(File.read(File.join(dir, "index.json")))
-      assert_equal data["shards"].map(&:last).sort, (Dir.children(dir) - ["index.json"]).sort, "stale shards removed"
+      assert_equal((data["shards"].map(&:last) + [data["latin"]]).sort, (Dir.children(dir) - ["index.json"]).sort,
+                   "stale shards removed")
       kept = data["shards"].map(&:last) & before.keys
       refute_empty kept, "unchanged shards keep their names"
       kept.each { |f| assert_equal before[f], File.mtime(File.join(dir, f)) }
@@ -168,6 +172,10 @@ class TestSplit < Minitest::Test
           await fresh.prepare('鳥瞰図');
           out.fetched = requested.length - before;
           out.after = fresh.search('鳥瞰図').map(r => r.ref);
+          try { fresh.search('iiif'); out.latinSync = 'no error'; } catch (e) { out.latinSync = e.message; }
+          const beforeLatin = requested.length;
+          out.latin = (await fresh.searchAsync('manif')).map(r => r.ref);
+          out.latinFetched = requested.length - beforeLatin;
           console.log(JSON.stringify(out));
         })().catch(e => { console.error(e); process.exit(1); });
       JS
@@ -176,6 +184,9 @@ class TestSplit < Minitest::Test
       assert_equal %w[agri1 agri4], js["blank"]
       assert_equal 2, js["fetched"]
       assert_equal %w[agri1], js["after"]
+      assert_match(/Latin tokens are not loaded/, js["latinSync"])
+      assert_equal %w[latin1], js["latin"]
+      assert_equal 2, js["latinFetched"], "the Latin tokens, then the shard of manifest"
       assert_operator js["requested"], :<, js["shards"], "a search fetches only some shards"
     end
   end

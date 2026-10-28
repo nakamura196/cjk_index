@@ -39,16 +39,19 @@ module CJKIndex
   #
   # Split (write_split): a directory with the manifest index.json, which is
   # the same without "tokens" and adds
-  #     "latin":  ["iiif", "manifest", ...],      every token without CJK characters, sorted
+  #     "latin":  "9c1d…07.json",                 file of the Latin tokens
   #     "shards": [["一", "3f2a…e1.json"], ...]   first token and file of each shard
-  # and the shard files, each a JSON object of tokens => posting lists. The
+  # the shard files, each a JSON object of tokens => posting lists, and the
+  # file of Latin tokens: a JSON array of every token without CJK characters,
+  # sorted, that lets the runtime expand Latin prefixes and typos. The
   # tokens are sorted by code point and cut into shards of about shard_size
   # bytes, so a token is in the last shard whose first token is not greater.
   # A shard file is named after a digest of its content, so a browser may
   # cache it: a changed shard gets a new name. The runtime loads the manifest
   # (refs, lengths, filters: what a blank query and facets need), and fetches
-  # only the shards of the tokens of a query. "latin" lets it expand Latin
-  # prefixes and typos without fetching shards.
+  # only the shards of the tokens of a query, and the Latin tokens when the
+  # query has a Latin word (on a technical blog they are most of the
+  # manifest's size otherwise).
   #
   # Older formats, still read by Builder.load, Searcher and the runtime:
   # version 3 writes each posting list as a JSON array
@@ -268,8 +271,8 @@ module CJKIndex
       File.join(dir, MANIFEST)
     end
 
-    # Yields [name, content] for each file of a split index: the shards, then
-    # the manifest (MANIFEST). For writing them somewhere other than a
+    # Yields [name, content] for each file of a split index: the shards, the
+    # Latin tokens, then the manifest (MANIFEST). For writing them somewhere other than a
     # directory on disk (the Jekyll plugin uses it).
     def each_split_file(shard_size: SHARD_SIZE)
       return enum_for(:each_split_file, shard_size: shard_size) unless block_given?
@@ -297,7 +300,10 @@ module CJKIndex
         bytes += pair.bytesize + 1
       end
       flush.call unless part.empty?
-      manifest = header.merge("latin" => latin, "shards" => shards)
+      content = JSON.generate(latin)
+      latin_name = "#{Digest::SHA256.hexdigest(content)[0, 16]}.json"
+      yield latin_name, content
+      manifest = header.merge("latin" => latin_name, "shards" => shards)
       manifest["filters"] = filters_h unless @filters.empty?
       yield MANIFEST, JSON.generate(manifest)
     end

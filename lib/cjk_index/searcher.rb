@@ -194,8 +194,10 @@ module CJKIndex
       avg = Array.new(nf, 0.0)
       @lengths.each_with_index { |len, i| avg[i % nf] += len if len }
       @avg_length = avg.map { |s| (v = s / [1, @count].max).zero? ? 1 : v }
-      @latin_tokens = (@tokens ? @tokens.keys.select { |t| latin?(t) } : data["latin"]).sort
-      @latin_set = @latin_tokens.to_set
+      # A split index lists its Latin tokens in a file, read when needed.
+      @latin_file = data["latin"] unless @tokens
+      @latin_tokens = @latin_file ? nil : @tokens.keys.select { |t| latin?(t) }.sort
+      @latin_set = @latin_tokens&.to_set
       @slot_of = {}
       @refs.each_with_index { |ref, doc| @slot_of[ref] ||= doc if ref }
       @filters = (data["filters"] || {}).to_h { |name, f| [name, setup_filter(f)] }
@@ -289,6 +291,10 @@ module CJKIndex
     def alternatives(token, last)
       return [[token], false] unless latin?(token)
 
+      if @latin_tokens.nil?
+        @latin_tokens = @load_shard.call(@latin_file).sort
+        @latin_set = @latin_tokens.to_set
+      end
       out = @latin_set.include?(token) ? [token] : []
       if @prefix && last
         from = @latin_tokens.bsearch_index { |k| k >= token } || @latin_tokens.length
