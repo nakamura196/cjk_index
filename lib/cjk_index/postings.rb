@@ -21,6 +21,10 @@ module CJKIndex
     ALPHABET = ((0x23..0x7d).map(&:chr) - ["\\"]).join.freeze
     LAST = 60
     LEAD = 30
+    # The characters that end a number are the bytes below LEAD_BYTE
+    # (FINAL_BYTES in the notation of String#count).
+    LEAD_BYTE = ALPHABET.getbyte(LAST)
+    FINAL_BYTES = "#-[\\]-_"
     # byte => digit; 0...60 ends a number, 60...90 leads.
     DIGIT = Array.new(256, -1).tap { |t| ALPHABET.each_byte.with_index { |b, i| t[b] = i } }.freeze
 
@@ -94,8 +98,15 @@ module CJKIndex
         end
         n = (acc * LAST) + d
         i += 1
+        # Skip n numbers: each ends with a byte below LEAD_BYTE. Many at a
+        # time are counted by String#count, which runs in C.
+        while n > 8
+          t = str.byteslice(i, n).count(FINAL_BYTES)
+          i += n
+          n -= t
+        end
         while n.positive?
-          n -= 1 if DIGIT[str.getbyte(i)] < LAST
+          n -= 1 if str.getbyte(i) < LEAD_BYTE
           i += 1
         end
         yield key, start, body, i
