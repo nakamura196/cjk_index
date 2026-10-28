@@ -1,11 +1,20 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require "cjk_index/jekyll"
 require "json"
 require "tmpdir"
 
+begin
+  require "cjk_index/jekyll"
+rescue LoadError
+  # Jekyll is not in this bundle (e.g. gemfiles/bridgetown.gemfile): skip below.
+end
+
 class TestJekyll < Minitest::Test
+  def setup
+    skip "jekyll is not installed" unless defined?(::Jekyll::Site)
+  end
+
   FIXTURE = File.expand_path("fixtures/cb-site", __dir__)
 
   def build(extra = {})
@@ -36,6 +45,16 @@ class TestJekyll < Minitest::Test
       assert_equal({ "kind" => "value", "values" => %w[地図 絵図], "docs" => [[0, 1], [1]], "separator" => ";" },
                    index["filters"]["type"])
       assert_equal [1900, nil], index["filters"]["date"]["docs"]
+    end
+  end
+
+  # filter fields need not be index fields; Jekyll gives a post's date as a Time
+  def test_collection_filters
+    spec = { "name" => "posts", "collection" => "posts", "fields" => %w[title], "filters" => { "kind" => "value", "date" => "year" } }
+    build("cjk_index" => { "indexes" => [spec] }) do |dest|
+      index = JSON.parse(File.read(File.join(dest, "assets/cjk-index/posts.json")))
+      assert_equal({ "kind" => "value", "values" => %w[写真], "docs" => [[0]] }, index["filters"]["kind"])
+      assert_equal [2023], index["filters"]["date"]["docs"]
     end
   end
 

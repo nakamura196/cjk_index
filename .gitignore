@@ -13,3 +13,4 @@
 *.key
 credentials.json
 .npmrc
+/gemfiles/*.lock

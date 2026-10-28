@@ -79,7 +79,7 @@ module CJKIndex
           docs = site.collections.fetch(spec["collection"]) do
             raise ::Jekyll::Errors::FatalException, "cjk_index: no collection #{spec['collection']}"
           end.docs
-          docs.each { |doc| builder.add(doc.url, document_fields(doc, builder.fields)) }
+          docs.each { |doc| builder.add(doc.url, document_fields(doc, builder.fields | builder.filters.keys)) }
         elsif spec["data"]
           ref = spec.fetch("ref", "id")
           Array(site.data[spec["data"]]).each do |row|

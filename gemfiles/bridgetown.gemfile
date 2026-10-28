@@ -1,0 +1,17 @@
+# frozen_string_literal: true
+
+# For test/test_bridgetown.rb. Bridgetown and Jekyll cannot be resolved
+# together, so the Bridgetown test has its own bundle; test_jekyll.rb skips
+# itself here.
+#
+#   BUNDLE_GEMFILE=gemfiles/bridgetown.gemfile bundle install
+#   BUNDLE_GEMFILE=gemfiles/bridgetown.gemfile bundle exec rake test
+
+source "https://rubygems.org"
+
+gemspec path: ".."
+
+gem "bridgetown", "~> 2.2"
+gem "csv"
+gem "minitest", "~> 5.0"
+gem "rake", "~> 13.0"
