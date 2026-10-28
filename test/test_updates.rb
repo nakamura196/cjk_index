@@ -55,6 +55,34 @@ class TestUpdates < Minitest::Test
     end
   end
 
+  # Many documents and long titles: key gaps of 60 and more, and fields with
+  # 9 and more (up to 60 and more) positions of a token. TestPostings checks
+  # the encoding of such lists piece by piece.
+  def test_random_changes_on_a_large_index_equal_rebuild
+    3.times do |seed|
+      rng = Random.new(seed)
+      long = ->(r) { ["東京", "國牛", "IIIF "].sample(random: r) * [9, 30, 70].sample(random: r) }
+      doc = ->(r) { { "title" => r.rand(3).zero? ? long.(r) : TITLES.sample(random: r), "creator" => TITLES.sample(random: r) } }
+      docs = (0...400).select { rng.rand(4).zero? }.to_h { |i| ["d#{i}", doc.(rng)] }
+      b = rebuild(docs)
+      200.times do
+        ref = "d#{rng.rand(400)}"
+        case rng.rand(3)
+        when 0
+          next if docs.key?(ref)
+
+          b.add(ref, docs[ref] = doc.(rng))
+        when 1
+          b.remove(ref)
+          docs.delete(ref)
+        else
+          b.update(ref, docs[ref] = doc.(rng))
+        end
+      end
+      assert_equal rebuild(docs).to_h, b.to_h, "seed #{seed}"
+    end
+  end
+
   def test_load_round_trips_and_can_be_updated
     rng = Random.new(1)
     docs = (0...12).to_h { |i| ["d#{i}", random_doc(rng)] }

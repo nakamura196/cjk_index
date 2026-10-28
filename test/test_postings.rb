@@ -41,4 +41,44 @@ class TestPostings < Minitest::Test
                  flat.(P.renumber(s, 3, [0, nil, nil, nil, 1, nil, 2]))
     assert_same s, P.renumber(s, 3, (0..6).to_a)
   end
+
+  # Random lists with key gaps and position counts of one to four characters
+  # (and so many positions to skip), checked against plain arrays.
+  def test_changes_on_random_lists
+    fields = 3
+    flatten = ->(entries) { entries.flat_map { |doc, field, offsets| [doc, field, offsets.size, *offsets] } }
+    key = ->(entry) { (entry[0] * fields) + entry[1] }
+    random_offsets = ->(rng) { Array.new([1, 2, 9, 70, 1900].sample(random: rng)) { rng.rand(60_000) }.sort }
+    50.times do |seed|
+      rng = Random.new(seed)
+      doc = 0
+      entries = Array.new(rng.rand(1..12)) do
+        doc += [0, 1, 25, 700, 20_000].sample(random: rng) + 1
+        [doc, rng.rand(fields), random_offsets.(rng)]
+      end
+      s = P.encode(flatten.(entries), fields)
+      keys = entries.map(&key)
+      assert_equal flatten.(entries), P.decode(s, fields), "seed #{seed}"
+      assert_equal keys, P.each_key(s).to_a
+      assert_equal keys.last, P.last_key(s)
+
+      gone = entries.sample(random: rng)
+      range = (gone[0] * fields)...((gone[0] + 1) * fields)
+      assert_equal flatten.(entries.reject { |e| range.cover?(key.(e)) }), P.decode(P.delete(s, range), fields)
+
+      new_doc = rng.rand(doc + 2)
+      unless entries.any? { |e| e[0] == new_doc }
+        added = [new_doc, rng.rand(fields), random_offsets.(rng)]
+        assert_equal flatten.((entries + [added]).sort_by(&key)), P.decode(P.insert(s.dup, key.(added), added[2]), fields)
+      end
+
+      kept = entries.map(&:first).uniq.reject { rng.rand(3).zero? }
+      numbering = []
+      kept.each_with_index { |d, i| numbering[d] = i }
+      renumbered = entries.select { |e| kept.include?(e[0]) }.map { |d, f, o| [numbering[d], f, o] }
+      # renumber expects the removed documents' entries to be gone already
+      left = (entries.map(&:first).uniq - kept).reduce(s) { |str, d| P.delete(str, (d * fields)...((d + 1) * fields)) }
+      assert_equal flatten.(renumbered), P.decode(P.renumber(left, fields, numbering), fields)
+    end
+  end
 end
