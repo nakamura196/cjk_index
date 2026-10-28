@@ -340,3 +340,18 @@ Not checked:
   keeps every shard and decoded list it has read.
 - Thread safety of the lazy caches in `Searcher` beyond the GVL (two
   threads may decode the same list twice; the result is the same).
+
+## 2026-10-28: format 4 and a split index on a real site, in Chrome
+
+- cb-ja-demo (branch cjk-index-0.2, 69 records, variants ja and zh) built
+  with this branch through a local path in a scratch Gemfile: the index is
+  `cjk_index/4` with `variant_digest`; the search page finds 8 results for
+  帝国大学 and marks 帝國大學; 实录 12, 鳥瞰図 2.
+- The same index written with `write_split(dir, shard_size: 8000)` (manifest
+  and 12 shards, 96 KB on disk), loaded in the same page: `searchAsync`
+  gave the same refs and scores (to 1e-9) as the one-file index for 8
+  queries (CJK, Simplified Chinese, Latin prefix and typo, two words), with
+  8 JSON requests in all. A sync `search` before its shard was loaded threw
+  "the shard … is not loaded; use searchAsync(query)".
+- Served by `python3 -m http.server` on 127.0.0.1: no real network latency,
+  no CDN cache. Safari, Firefox and phones are still not checked.

@@ -13,7 +13,9 @@ Gem::Specification.new do |spec|
                      "Includes a command-line tool, a Rake task, a Jekyll plugin (with a CollectionBuilder preset) " \
                      "and a Bridgetown plugin."
   spec.homepage = "https://github.com/nakamura196/cjk_index"
-  spec.licenses = ["MIT", "Apache-2.0", "Unicode-3.0"] # Apache-2.0: the optional OpenCC-derived tables (data/zh-*.tsv); Unicode-3.0: Unihan data in data/ja-kyujitai.tsv
+  # Apache-2.0: the OpenCC-derived tables (data/zh-*.tsv); Unicode-3.0: Unihan data in
+  # data/ja-kyujitai.tsv; Unlicense: data/ko-hanyang-pua.tsv. See NOTICE.
+  spec.licenses = ["MIT", "Apache-2.0", "Unicode-3.0", "Unlicense"]
   spec.required_ruby_version = ">= 3.1"
   spec.metadata["source_code_uri"] = spec.homepage
   spec.metadata["documentation_uri"] = "#{spec.homepage}#readme"

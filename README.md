@@ -1,5 +1,7 @@
 # cjk_index
 
+日本語の説明: [docs/ja/README.md](docs/ja/README.md)
+
 Dictionary-free full-text search for Chinese, Japanese and Korean text, in
 pure Ruby. Build the index in Ruby, then query it in Ruby (`CJKIndex::Searcher`)
 or in the browser with a small script that has no dependencies. Both return
@@ -24,7 +26,8 @@ even when it is an exact title. cjk_index instead:
   native extension (the same idea as [kensaku](https://github.com/whispcat/kensaku));
 - folds variants on both sides: NFKC, lowercase, katakana → hiragana,
   old-form kanji → modern form (「圖」→「図」), 々 expanded (「佐々木」→「佐佐木」),
-  and optionally Traditional ↔ Simplified Chinese (from OpenCC);
+  and optionally Traditional ↔ Simplified Chinese (from OpenCC) and old
+  Hangul in the Private Use Area;
 - ranks with BM25 per field, with field boosts;
 - marks matches in the original text (`highlight`, `excerpt`), even when the
   query and the text differ only by these variants;
@@ -32,10 +35,13 @@ even when it is an exact title. cjk_index instead:
   one typo;
 - generates the browser script from the same tables as the Ruby code, so
   indexing and querying cannot drift apart (checked by the test suite under
-  Node; the script also refuses an index built with other tables).
+  Node; the script also refuses an index built with other tables);
+- splits a large index into a small manifest and shards that the browser
+  fetches only when a query needs them.
 
-The browser script is about 6.5 KB gzipped with the Japanese table, 24 KB
-with the Chinese table as well.
+The browser script is about 9 KB gzipped with the Japanese table, 24 KB
+with the Chinese table as well. Index it from Ruby, Jekyll, Bridgetown, a
+Rake task or the command line.
 
 How this compares with Pagefind, kensaku, lunr.js, rroonga, tantiny and others:
 [docs/comparison.md](docs/comparison.md).
@@ -46,17 +52,18 @@ Safari: [bench/browser/](bench/browser/).
 
 When to use it, and when not to:
 
-- **Good fit:** catalogs, collection records or blog posts, from a few
-  thousand records up to the 16,951 we measured (19.3 MB gzipped at that size,
-  a heavy download on slow connections; above about 10,000 records, consider
-  splitting the index); static sites, command-line tools, scripts and small apps; anywhere
-  you want nothing to install outside Ruby, or the same results in Ruby and
-  the browser.
-- **Not a good fit (yet):** large amounts of full text, frequent updates, or
-  search served continuously by a server. The whole index is held in memory
-  and shipped as one file: about 5 bytes per character gzipped, and 3 GB of
-  memory to build 35.6 million characters. A native engine (rroonga, tantiny)
-  or a database feature (pg_bigm) is the better choice there.
+- **Good fit:** catalogs, collection records, blog posts and full texts on
+  static sites, command-line tools, scripts and small apps; anywhere you want
+  nothing to install outside Ruby, or the same results in Ruby and the
+  browser. In one file, the 16,951-record Aozora Bunko catalog is 12.9 MB
+  gzipped; as a [split index](#large-collections-split-indexes), the browser
+  loads a 72 KB manifest and fetches about 40 KB per query, and 1,000 full
+  texts (33 MB gzipped in one file) need about the same.
+- **Not a good fit:** frequent updates to a large index, or search served
+  continuously by a server. An update rewrites the whole index, and the index
+  is held in memory: building 3,000 full texts (35.6 million characters) takes
+  37 s and 0.56 GB. A native engine (rroonga, tantiny) or a database feature
+  (pg_bigm) is the better choice there.
 
 ## Ruby
 
@@ -147,9 +154,9 @@ gets the old index or the new one, never a partly written file. A reader
 keeps the index it loaded until the file changes; `interval:` limits how
 often it checks. Put several changes in one block to write once.
 
-On the Aozora Bunko catalog (16,951 records, 61 MB file), a check of an
-unchanged file takes 0.09 ms, loading a changed file 0.6–0.7 s, and an update
-0.6 s (2.1 s when another process wrote last, as the file is read again).
+On the Aozora Bunko catalog (16,951 records), a check of an unchanged file
+takes 0.09 ms, and an update about 0.5 s (about 2 s when another process
+wrote last, as the file is read again).
 [bench/index_file.rb](bench/index_file.rb). The lock is `flock`: use a local
 disk, not NFS.
 
@@ -163,21 +170,36 @@ for 1,000 records, 0.24 s for 5,000, 0.7 s for 16,951. A record edited now
 and then needs nothing special; put a few changes in one block; for an
 import, build the index again and `write` it (11 s for 16,951 records).
 
-### Without Jekyll
+## Large collections: split indexes
 
-[examples/search_csv.rb](examples/search_csv.rb) searches a CSV catalog from
-the command line, in about 40 lines of plain Ruby:
+Indexes are written in format `cjk_index/4`: each posting list is a compact
+string, about a third smaller gzipped than format 3 and three times smaller
+before compression. Ruby and the browser script still read formats 2 and 3.
 
-```console
-$ ruby examples/search_csv.rb items.csv 实录 --ref objectid --variants ja,zh
-12 results for 实录
-jitsu_51ed985b       宣祖[実録] 第1帙 第1冊 巻2戊辰元年(1568)
-...
-$ ruby examples/search_csv.rb items.csv 帝国大学 --ref objectid
-3 results for 帝国大学
-agri_6d032fb5        東京[帝國大學]農學部建物位置圖
-...
+For full text or tens of thousands of records, write a split index: a small
+manifest (refs, lengths, filters) and shards of about 32 KB that the browser
+fetches only when a query needs them.
+
+```ruby
+builder.write_split("assets/search")   # index.json and the shards
 ```
+
+```js
+const index = await CJKIndex.load("/assets/search/index.json");
+const results = await index.searchAsync("銀河鉄道", { filter: { type: "小説" } });
+// or: await index.prepare(query); index.search(query, options)
+```
+
+`searchAsync` also works on an index in one file, so a page can use it for
+both. A blank query with a filter, `facets`, `highlight` and `excerpt` need
+no shard. On 1,000 Aozora Bunko full texts (33 MB gzipped as one file), the
+manifest is 28 KB and a query fetches 43 KB (median).
+
+In Ruby, `CJKIndex::Searcher.load("assets/search")` reads shards as queries
+need them, and `CJKIndex::Builder.read("assets/search")` loads a split index
+to change it. Shard names are digests of their content, so they can be cached
+for long; `write_split` removes the shards the new manifest no longer lists.
+`IndexFile` always writes one file. Measurements: [bench/README.md](bench/README.md).
 
 ## Browser
 
@@ -192,6 +214,7 @@ agri_6d032fb5        東京[帝國大學]農學部建物位置圖
     var results = index.search("鳥瞰図", { filter: { type: "地図", date: { min: 1890, max: 1910 } } });
     index.facets("type", results);              // => [{ value: "地図", count: 12 }, ...]
   });
+  // a split index: await index.searchAsync(query, options), see above
 </script>
 ```
 
@@ -222,9 +245,14 @@ cjk_index:
         type: value
         subject: { kind: value, separator: ";" }
         date: year
+    - name: texts
+      collection: texts
+      fields: [title, content]
+      split: true                 # -> assets/cjk-index/texts/index.json and shards
 ```
 
-The runtime is written to `assets/cjk-index/cjk-index.js`.
+The runtime is written to `assets/cjk-index/cjk-index.js`. Moving a site from
+lunr.js: [docs/migrating-from-lunr.md](docs/migrating-from-lunr.md).
 
 ### CollectionBuilder
 
@@ -243,25 +271,120 @@ The preset follows CollectionBuilder's own search settings: fields with
 column; set `filters:` to change them. A working example:
 https://github.com/nakamura196/cb-ja-demo
 
+## Bridgetown
+
+Tested with Bridgetown 2.2.2. Node is not needed.
+
+```ruby
+# config/initializers.rb
+require "cjk_index/bridgetown"
+
+Bridgetown.configure do |config|
+  init :cjk_index, indexes: [
+    { name: "posts", collection: "posts", fields: %w[title content], boosts: { title: 3 },
+      filters: { category: "value", date: "year" } }
+  ]
+end
+```
+
+This writes `output/cjk-index/posts.json` and `output/cjk-index/cjk-index.js`.
+Use `data:` and `ref:` instead of `collection:` for rows of
+`src/_data/*.csv`. See [examples/bridgetown](examples/bridgetown).
+
+## Command line and Rake
+
+```console
+$ cjk_index build items.csv --ref id --fields title,creator --boost title=3 --filter type --filter date=year -o index.json --runtime cjk-index.js
+$ cjk_index search index.json 鳥瞰図 --filter type=地図 --filter date=1890..1910
+$ cjk_index runtime --variants ja,zh-safe -o cjk-index.js
+```
+
+`build` reads CSV, a JSON array or JSON Lines, from a file or from standard
+input (`-`). `--filter subject=value:";"` splits values on `;`. Add `--json`
+to `search` for machine-readable results. CSV needs the `csv` gem, which is
+no longer a default gem from Ruby 3.4.
+
+```ruby
+# Rakefile
+require "cjk_index/rake_task"
+
+CJKIndex::RakeTask.new(:search_index) do |t|
+  t.source  = "data/items.csv"            # or t.records = -> { Item.all.map(&:to_search) }
+  t.output  = "public/search/items.json"
+  t.runtime = "public/search/cjk-index.js"
+  t.fields  = %w[title creator]
+  t.boosts  = { "title" => 3 }
+  t.filters = { "type" => "value", "date" => "year" }
+end
+```
+
+### A script with no dependencies
+
+[examples/search_csv.rb](examples/search_csv.rb) searches a CSV catalog from
+the command line, in about 40 lines of plain Ruby:
+
+```console
+$ ruby examples/search_csv.rb items.csv 实录 --ref objectid --variants ja,zh
+12 results for 实录
+jitsu_51ed985b       宣祖[実録] 第1帙 第1冊 巻2戊辰元年(1568)
+...
+$ ruby examples/search_csv.rb items.csv 帝国大学 --ref objectid
+3 results for 帝国大学
+agri_6d032fb5        東京[帝國大學]農學部建物位置圖
+...
+```
+
+## Rails
+
+[examples/rails](examples/rails) (Rails 8.1.4, tested with Puma and four
+workers) keeps one index for all worker processes with `IndexFile`: an
+initializer, a model concern that updates the index after each commit, a
+search action with filters, and a Rake task that rebuilds the index.
+Notes on all the adapters: [docs/notes/adapters.md](docs/notes/adapters.md).
+
 ## Variant tables
 
 | name | folds | source |
 |---|---|---|
-| `ja` (default) | 291 Japanese old forms → modern forms | written for cjk_index |
-| `zh` | 3,202 Traditional → Simplified Chinese | OpenCC `TSCharacters.txt` (Apache-2.0); ambiguous entries dropped |
+| `ja` (default) | 409 Japanese old forms and glyph variants → one form (圖→図, 證→証, 禱/祷, 剝/剥) | Jōyō Kanji Table (2010), Jinmeiyō kanji list and kZVariant, via Unihan 18.0 (Unicode License v3) |
+| `zh-safe` | 2,767 Traditional → Simplified pairs that are one-to-one both ways | OpenCC (Apache-2.0) |
+| `zh` | 3,202 Traditional → Simplified (as in 0.1) | OpenCC `TSCharacters.txt` (Apache-2.0); ambiguous entries dropped |
+| `ko` | 5,660 old Hangul characters in the Hanyang Private Use Area → standard jamo | hypua table (Unlicense), from the KTUG Hanyang PUA Table Project |
 
 With several tables, characters linked by any of them fold to one form,
-preferring the table listed first (`[ja, zh]`: 圖, 図, 图 → 図). The `zh`
-table also merges characters that are distinct in Japanese (後 and 后), so
-it is opt-in.
+preferring the table listed first (`[ja, zh-safe]`: 圖, 図, 图 → 図).
+
+`zh` also merges characters that are distinct in Japanese and in
+Traditional Chinese: 後 and 后, 發 and 髮 (both 发), 機 and 机. Combined with
+`ja`, it merges 45 such groups of Jōyō and Jinmeiyō kanji. `zh-safe` leaves
+those pairs out, so a Simplified query 发展 does not find 發展. Use `zh-safe`
+for Japanese sites that should also match Simplified queries, and `zh` for
+Chinese sites.
+
+Hangul needs no table: precomposed syllables and conjoining jamo are folded
+by Unicode normalization. `ko` is for old Hangul stored in the Private Use
+Area by HWP and the Hanyang fonts; a query typed in standard jamo then finds
+and highlights it.
+
+Browser script size, gzipped: no table 6.3 KB, `ja` 9.0 KB, `ja, zh-safe`
+24.1 KB, `ja, zh` 25.9 KB, `ja, ko` 36.1 KB.
+
+The tables are UTF-8 TSV files in `data/` ("variant<TAB>folded", an optional
+comment column, `#` comments); `script/variant_tables.rb` generates them from
+their sources. Sources, rules and counts:
+[docs/notes/variant-tables.md](docs/notes/variant-tables.md). An index
+records a digest of what its tables fold, and Ruby and the browser script
+refuse an index built with other table contents: rebuild the index after
+changing tables or upgrading from 0.x.
 
 ## Status
 
-0.2. On RubyGems: `gem install cjk_index`
-(https://rubygems.org/gems/cjk_index). 0.2 adds filters, index updates and
-an index file shared by several processes. Planned for 1.0: index sharding
-for large sites (see the [benchmarks](bench/README.md)), a Bridgetown
-adapter, a CLI, and variant tables from official sources.
+1.0. On RubyGems: `gem install cjk_index`
+(https://rubygems.org/gems/cjk_index). Changes: [CHANGELOG.md](CHANGELOG.md).
+Development is supported by the Ruby Association Grant 2026.
+
+Not yet checked by a native reader: the `ko` table and the Korean examples
+([docs/review/](docs/review/)). Reports are welcome.
 
 ## Development
 
