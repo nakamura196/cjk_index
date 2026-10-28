@@ -526,3 +526,60 @@ previous entry.
   macOS and Ubuntu (Ruby 3.3, 3.4, 4.0) pass. Ruby 3.1 failed before the
   tests: `ubuntu-latest` is now Ubuntu 26.04, and setup-ruby has no Ruby
   3.1.7 build for it (HTTP 404). Not related to this change.
+
+## 2026-10-25: Puma with four workers
+
+The last open point of "an index file shared by processes": a real server
+with several worker processes. `bench/puma` is a Rack app (`config.ru`) that
+searches and adds records through one `IndexFile`, and a client (`run.rb`)
+that starts `puma -w 4 -t 4`, adds 40 records through 4 client threads while
+8 other threads search, a new connection per request so that any worker can
+take it. Aozora catalog records, Apple M4 Max, Ruby 4.0.1, Puma 8.0.2,
+Rack 3.2.7.
+
+What it checks:
+
+- lost: after the run, the file holds all 40 added records, and each of the
+  four workers finds all 40.
+- broken: no request failed. A worker that read a partly written file would
+  raise `JSON::ParserError`, answered as status 500.
+- stale: a search that started after an add had returned, but did not find
+  that record; counted with how long after the add it started.
+
+| records | file | `--preload` | searches | adds (mean) | lost | broken | stale | stale at most |
+|---:|---:|:---:|---:|---:|---:|---:|---:|---:|
+| 1,000 | 3.6 MB | no | 26,341 | 0.11 s | 0 | 0 | 92 | 102 ms |
+| 1,000 | 3.6 MB | yes | 25,429 | 0.11 s | 0 | 0 | 71 | 99 ms |
+| 5,000 | 17.9 MB | no | 66,967 | 0.32 s | 0 | 0 | 348 | 257 ms |
+| 5,000 | 17.9 MB | yes | 70,087 | 0.33 s | 0 | 0 | 326 | 226 ms |
+| 16,951 | 61.0 MB | no | 150,624 | 0.85 s | 0 | 0 | 604 | 1,012 ms |
+| 16,951 | 61.0 MB | yes | 128,069 | 0.78 s | 0 | 0 | 446 | 355 ms |
+
+All four workers took both adds and searches, and each loaded 39–41
+snapshots (one per add, plus the first). With `--preload`, as Rails apps
+run in production, Puma loads the app and a searcher before forking; the
+workers then start from that snapshot and load the file again after the
+first add, as without it.
+
+Where the stale searches come from: with one thread per worker (`-t 1`)
+there were none (1,000 and 5,000 records). They are the case the design
+allows: while one thread of a worker loads the changed file, the worker's
+other threads answer from the previous snapshot instead of waiting. So a
+search can miss a record for about one load of the file after its update,
+up to 1 s on the 61 MB index here (four workers loading at once, while
+writers write); the next search after the load finds it. No worker kept
+reading an old index.
+
+The checks catch faults (1,000 records, `run.rb --fault`): with the lock
+removed, 29 of 40 added records were lost; writing the file in place instead
+of renaming a new file over it, workers read a partly written file 166
+times (`JSON::ParserError`).
+
+Not changed: threads could wait for the load in progress instead. That
+would remove the stale window but make those requests wait up to the same
+second. For a catalog edited now and then, a search that misses an edit for
+under a second seems the better trade; if someone needs to read their own
+write at once, it can be an option.
+
+Not checked: Windows (Puma has no workers there), and Puma's
+`fork_worker` mode.
