@@ -47,6 +47,12 @@ More ways to build an index:
 - Migration guide from lunr.js, in English and Japanese
   (`docs/migrating-from-lunr.md`).
 
+Filters:
+
+- A `value` filter compares value ids instead of folded strings, in Ruby
+  and in the browser (#14): filtering 17,000 records by one author takes
+  1.7 ms instead of 2.7 ms.
+
 Fixes:
 
 - A `year` filter on a Time or Date (Jekyll gives a post's `date` as a Time)
