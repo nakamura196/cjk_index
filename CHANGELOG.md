@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 (2026-10-28)
 
 - `variants` also takes table files of your own: one group per line,
   tab-separated, the form to fold to first (the format of the itaiji lists
