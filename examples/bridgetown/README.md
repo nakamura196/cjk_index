@@ -28,5 +28,5 @@ Notes
 
 - The files are written after each build, including the rebuilds of
   `bin/bridgetown start`; a file is rewritten only when its content changed.
-- A static page without a collection (such as `src/index.md`) is not
-  indexed: put pages you want to find into a collection.
+- Pages such as `src/about.md` belong to the `pages` collection; index them
+  with `collection: %w[posts pages]`.
