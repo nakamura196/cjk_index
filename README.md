@@ -257,10 +257,11 @@ it is opt-in.
 
 ## Status
 
-0.1, early. On RubyGems: `gem install cjk_index`
-(https://rubygems.org/gems/cjk_index). Filters and index updates are on the
-main branch for 0.2. Planned: index sharding for large sites (see the
-[benchmarks](bench/README.md)), a Bridgetown adapter and a CLI.
+0.2. On RubyGems: `gem install cjk_index`
+(https://rubygems.org/gems/cjk_index). 0.2 adds filters, index updates and
+an index file shared by several processes. Planned for 1.0: index sharding
+for large sites (see the [benchmarks](bench/README.md)), a Bridgetown
+adapter, a CLI, and variant tables from official sources.
 
 ## Development
 
