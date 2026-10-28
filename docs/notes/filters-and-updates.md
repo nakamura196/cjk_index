@@ -340,3 +340,246 @@ The entries above that say "not committed" are now on branch `cjk-index-0.2`
 of cb-ja-demo: 3f41aba (search page facets and the shared include), 5bcfd75
 (browse page), e5b6b39 (Gemfile pointing at this worktree; trial only, to be
 replaced with the released gem before it goes to main).
+
+## 2026-10-23: an index file shared by processes
+
+The mentor asked whether updates work when a Rails app runs several
+processes. They did not: each process held its own copy in memory, an update
+in one was invisible to the others, and two processes writing the file could
+overwrite each other's changes.
+
+How two engines handle it:
+
+- Groonga shares one database between threads and processes. Reads take no
+  lock ("read lock-free data structures"), and searches run while another
+  process updates. Writers take a lock on the database, table or column; a
+  lock left by a crashed process has to be cleared (`lock_clear`).
+  https://groonga.org/docs/characteristic.html,
+  https://groonga.org/docs/reference/commands/lock_clear.html,
+  https://groonga.org/docs/reference/command/return_codes/grn_resource_deadlock_avoided.html
+- Lucene allows one `IndexWriter` per directory (a `write.lock` file).
+  Readers search a point-in-time snapshot and see changes only when they
+  open the index again.
+  https://lucene.apache.org/core/9_0_0/core/org/apache/lucene/index/IndexWriter.html
+
+cjk_index keeps the index in Ruby objects, and processes cannot share them;
+the file is one JSON document. So the Groonga model (one copy, updated in
+place, read by all) is out of reach without a different file format. Within
+one process the Builder already updates in place; between processes the
+Lucene model fits: one writer at a time, snapshots for readers.
+
+Kept: `CJKIndex::IndexFile`.
+
+- `update { |builder| ... }` takes `flock` on `<path>.lock`, reads the file,
+  runs the block, writes to a temporary file in the same directory (fsync)
+  and renames it over the file. The lock covers the whole read–change–write,
+  so no update is lost. `flock` is released by the OS when a process dies,
+  so a crash leaves no lock behind (unlike a lock recorded in the file).
+- A writer keeps its Builder and reads the file again only if someone else
+  wrote it since (compared by inode, device, size and mtime).
+- `searcher` stats the file (or once per `interval:` seconds) and loads it
+  again when it changed. While one thread loads, the other threads keep
+  using the old Searcher. The stamp is taken from the open file handle, so it
+  always belongs to the content that was read.
+- If the block raises, nothing is written and the Builder is dropped.
+
+Tests (test/test_index_file.rb, 10): a reader sees another instance's
+update; the writer sees its own at once even with a long interval; the
+updated file equals a rebuild; 4 threads and 4 forked processes × 5 updates
+lose none; 3 reader threads searching during 10 updates of a 300-record index
+never fail to parse. Checked that the tests catch faults: without `flock` the
+process test fails every time (fewer than 20 records); writing the file in
+place instead of renaming makes readers hit `JSON::ParserError` every time.
+
+`bench/index_file.rb` on the Aozora catalog (16,951 records, three filters,
+61.2 MB file), MacBook, Ruby 4.0.1:
+
+| step | time |
+|---|---:|
+| write a full build (to_json, fsync, rename) | 0.59 s |
+| first searcher in a process (load) | 0.72 s |
+| searcher, file unchanged (one stat) | 0.086 ms |
+| first update in a process (load, update, write) | 2.19 s |
+| later updates from the same process | 0.57 s |
+| 5 updates in one block | 1.05 s |
+| update after another process wrote (load again) | 2.05 s |
+| searcher after the file changed (load again) | 0.58 s |
+
+- Checking for changes on every search costs nothing next to a search
+  (2.3 ms for 東京 in the earlier entry), so `interval:` defaults to 0.
+- An update costs about 0.6 s, almost all of it writing the 61 MB file. For
+  records that change often, a job that gathers changes and updates once is
+  cheaper than one update per record.
+- Each process holds the whole index; while reloading it briefly holds two.
+
+Rejected:
+
+- Each process writing the file without a lock: last writer wins, earlier
+  updates are lost (the fork test shows it).
+- Notifying the other processes (signals, a pub/sub channel): needs
+  something outside Ruby's standard library or knowledge of the server; a
+  stat per search is enough.
+- Appending changes to a log next to the index and replaying it in readers:
+  would make updates cheap, but readers would need the Builder's update
+  logic and the file would no longer be the format the browser reads. Worth
+  reconsidering if the 0.6 s per update matters to someone.
+
+Not checked: Windows (rename over a file that a reader has open is retried;
+CI will show whether that is enough), NFS (flock is unreliable there; the
+README says to use a local disk), and a real Rails app with Puma workers.
+
+## 2026-10-23: crashes, a hung writer, and the cost of rewriting the file
+
+Two open questions from the entry above, answered here rather than left to
+the mentor.
+
+Does a crash leave a lock, as in Groonga? Groonga treats a lock left over
+after a crash as a sign that the object may be broken, because the lock is
+held while the object is changed in place: `grndb recover` finds broken
+objects by remaining locks, and its manual says to truncate and load the
+data again rather than only clear the lock
+(https://groonga.org/docs/reference/executables/grndb.html). Groonga 11.0.6
+added automatic recovery, which does not cover every case
+(https://groonga.org/en/blog/2021/08/29/groonga-11.0.6.html). `IndexFile`
+never changes the file in place, so this cannot happen. Tested by killing a
+writer (SIGKILL) while its temporary file existed, with 2,000 records: the
+index parsed with all 2,000 records, the next writer got the lock at once,
+and the left temporary file was removed by it. The test passed 5 of 5 runs.
+
+What a crash does not cover, and what was added for it:
+
+- A writer that hangs while holding the lock (flock is released only when
+  the process ends). Groonga gives up on a lock after about 3 hours by
+  default (`GRN_LOCK_TIMEOUT`). `IndexFile` now waits at most
+  `lock_timeout:` seconds (default 60) and raises `LockTimeout`. Tested with
+  a thread holding the lock.
+- Temporary files left by a killed writer. They are made only while the lock
+  is held, so the next writer deletes any it finds.
+- Power loss after the rename. A rename is atomic but becomes durable only
+  when the directory is synced too (ext4, xfs); PostgreSQL's
+  `durable_rename` does the same
+  (https://postgresql.org/message-id/565E14D9.6050805%40gmx.net). `IndexFile`
+  now fsyncs the directory after the rename; on Windows, which cannot open a
+  directory, it skips this. Not tested (needs a power cut).
+
+Is rewriting the whole file on each update acceptable? Update time by index
+size, Aozora catalog records, MacBook, Ruby 4.0.1 (median of 5 updates from
+one process):
+
+| records | file | update | of which to_json |
+|---:|---:|---:|---:|
+| 1,000 | 3.6 MB | 0.08 s | 0.08 s |
+| 5,000 | 17.9 MB | 0.24 s | 0.24 s |
+| 10,000 | 35.5 MB | 0.48 s | 0.39 s |
+| 16,951 | 61.2 MB | 0.71 s | 0.57 s |
+
+- The cost is linear in the size and almost all of it is generating the
+  JSON. At the 20,000-record end of the target, about 1.4 updates per second
+  can be written, one after another.
+- That is enough for a catalog that staff edit by hand. It is not enough for
+  an import that updates records one by one: 10,000 single updates would
+  take 1–2 hours. In one block they still cost about 0.1 s each in the
+  Builder (earlier entry), about 17 minutes; a full build and `write` takes
+  about 11 s. The README says: a few changes in one block, an import as a
+  full build.
+- Rejected for now: a change log next to the index, merged later (as Lucene
+  writes new segments and merges them). It would make each update cheap, but
+  readers would have to replay the log and the browser could no longer read
+  the file as it is. Reconsider if someone needs frequent single updates.
+
+## 2026-10-23: Windows (CI)
+
+The first CI run on `windows-latest` (Ruby 4.0) failed in the test with
+three readers searching during ten updates: `Errno::EACCES` on the rename,
+still after 50 retries (0.5 s).
+
+- Windows cannot rename a file over one that another handle has open.
+  Readers opened the file on every check to take its stamp, so with
+  readers searching all the time the file was nearly always open.
+- Moving the check to `File.stat` was not enough at first: on Windows
+  `File.stat(path)` and the stat of an open file give different values
+  (Ruby 4.0.7), so the stamps never matched and readers still opened the
+  file every time. All stamps now come from `File.stat`; a reader opens the
+  file only when it has changed.
+- The rename and that open are retried for up to 5 s.
+- With these, all 59 tests pass on Windows, Linux (Ruby 3.1–4.0) and macOS
+  (runs 40069227981 failed, 40069349382 failed, 40069470693 passed).
+- Not tested on Windows: the two tests that need `fork` (processes
+  updating at once, a killed writer) are skipped there. Threads updating at
+  once and readers during updates do run.
+
+## 2026-10-25: the process tests on Windows
+
+The two tests that used `fork` (four processes × five updates at once; a
+writer killed while it writes) now start a separate Ruby process with
+`Process.spawn` (`test/support/index_file_writer.rb`), so they run on
+Windows too. This closes the "Not tested on Windows" point of the
+previous entry.
+
+- The kill test missed the moment in 4 of 15 local runs (macOS): the
+  temporary file exists only while the writer writes it, and the kill
+  could come just after the rename. It was then skipped. It now tries up to
+  5 times; 15 of 15 local runs then did the check.
+- On Windows, `Process.kill(:KILL, pid)` ends the writer; the lock is
+  released and the next writer removes its temporary file, as on Linux.
+- CI run 40252891096: Windows (Ruby 4.0) 59 runs, 0 failures, 0 skips;
+  macOS and Ubuntu (Ruby 3.3, 3.4, 4.0) pass. Ruby 3.1 failed before the
+  tests: `ubuntu-latest` is now Ubuntu 26.04, and setup-ruby has no Ruby
+  3.1.7 build for it (HTTP 404). Not related to this change.
+
+## 2026-10-25: Puma with four workers
+
+The last open point of "an index file shared by processes": a real server
+with several worker processes. `bench/puma` is a Rack app (`config.ru`) that
+searches and adds records through one `IndexFile`, and a client (`run.rb`)
+that starts `puma -w 4 -t 4`, adds 40 records through 4 client threads while
+8 other threads search, a new connection per request so that any worker can
+take it. Aozora catalog records, Apple M4 Max, Ruby 4.0.1, Puma 8.0.2,
+Rack 3.2.7.
+
+What it checks:
+
+- lost: after the run, the file holds all 40 added records, and each of the
+  four workers finds all 40.
+- broken: no request failed. A worker that read a partly written file would
+  raise `JSON::ParserError`, answered as status 500.
+- stale: a search that started after an add had returned, but did not find
+  that record; counted with how long after the add it started.
+
+| records | file | `--preload` | searches | adds (mean) | lost | broken | stale | stale at most |
+|---:|---:|:---:|---:|---:|---:|---:|---:|---:|
+| 1,000 | 3.6 MB | no | 26,341 | 0.11 s | 0 | 0 | 92 | 102 ms |
+| 1,000 | 3.6 MB | yes | 25,429 | 0.11 s | 0 | 0 | 71 | 99 ms |
+| 5,000 | 17.9 MB | no | 66,967 | 0.32 s | 0 | 0 | 348 | 257 ms |
+| 5,000 | 17.9 MB | yes | 70,087 | 0.33 s | 0 | 0 | 326 | 226 ms |
+| 16,951 | 61.0 MB | no | 150,624 | 0.85 s | 0 | 0 | 604 | 1,012 ms |
+| 16,951 | 61.0 MB | yes | 128,069 | 0.78 s | 0 | 0 | 446 | 355 ms |
+
+All four workers took both adds and searches, and each loaded 39–41
+snapshots (one per add, plus the first). With `--preload`, as Rails apps
+run in production, Puma loads the app and a searcher before forking; the
+workers then start from that snapshot and load the file again after the
+first add, as without it.
+
+Where the stale searches come from: with one thread per worker (`-t 1`)
+there were none (1,000 and 5,000 records). They are the case the design
+allows: while one thread of a worker loads the changed file, the worker's
+other threads answer from the previous snapshot instead of waiting. So a
+search can miss a record for about one load of the file after its update,
+up to 1 s on the 61 MB index here (four workers loading at once, while
+writers write); the next search after the load finds it. No worker kept
+reading an old index.
+
+The checks catch faults (1,000 records, `run.rb --fault`): with the lock
+removed, 29 of 40 added records were lost; writing the file in place instead
+of renaming a new file over it, workers read a partly written file 166
+times (`JSON::ParserError`).
+
+Not changed: threads could wait for the load in progress instead. That
+would remove the stale window but make those requests wait up to the same
+second. For a catalog edited now and then, a search that misses an edit for
+under a second seems the better trade; if someone needs to read their own
+write at once, it can be an option.
+
+Not checked: Windows (Puma has no workers there), and Puma's
+`fork_worker` mode.

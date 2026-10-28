@@ -41,3 +41,13 @@ What this shows:
   text from 1,000 to 3,000 works took 8 times as long to build), and Ruby's
   memory reaches 3 GB at 36 M characters. The current builder keeps
   everything in Ruby hashes and writes one JSON document.
+
+## Puma workers
+
+[puma/](puma/) serves a small Rack app with `puma -w 4` and checks that
+`CJKIndex::IndexFile` keeps the workers in step while records are added and
+searched at the same time: no add is lost, no worker reads a partly written
+file, and how long a worker may answer from the previous index. See
+[puma/run.rb](puma/run.rb) for how to run it, and the entry "Puma with four
+workers" in [docs/notes/filters-and-updates.md](../docs/notes/filters-and-updates.md)
+for the results.

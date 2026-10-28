@@ -126,6 +126,43 @@ with the remaining documents in the same order (the test suite checks this
 on random sequences of changes). A `Searcher` made from a `Builder` answers
 for its current documents.
 
+### Sharing an index file between processes
+
+A Rails app usually runs several worker processes, and each holds its own
+copy of the index in memory. `IndexFile` keeps them in step through one file:
+
+```ruby
+# config/initializers/cjk_index.rb
+SEARCH = CJKIndex::IndexFile.new(Rails.root.join("db/search-index.json"))
+
+SEARCH.write(builder)                                   # a full build, e.g. in a Rake task
+SEARCH.update { |b| b.update(item.id, item.to_doc) }    # after a record changes, in any process
+SEARCH.searcher.search("鳥瞰図")                        # loads the file again if it has changed
+```
+
+`update` takes a lock, reads the file, runs the block and writes the result,
+so updates from different processes are applied one after another. The new
+index is written to a temporary file and renamed over the old one: a reader
+gets the old index or the new one, never a partly written file. A reader
+keeps the index it loaded until the file changes; `interval:` limits how
+often it checks. Put several changes in one block to write once.
+
+On the Aozora Bunko catalog (16,951 records, 61 MB file), a check of an
+unchanged file takes 0.09 ms, loading a changed file 0.6–0.7 s, and an update
+0.6 s (2.1 s when another process wrote last, as the file is read again).
+[bench/index_file.rb](bench/index_file.rb). The lock is `flock`: use a local
+disk, not NFS.
+
+The file is never changed in place, so a writer that is killed leaves the
+previous index intact and nothing to repair. A writer waits at most
+`lock_timeout:` seconds (default 60) for another one, then raises
+`CJKIndex::IndexFile::LockTimeout`.
+
+An update rewrites the whole file, so its cost grows with the index: 0.08 s
+for 1,000 records, 0.24 s for 5,000, 0.7 s for 16,951. A record edited now
+and then needs nothing special; put a few changes in one block; for an
+import, build the index again and `write` it (11 s for 16,951 records).
+
 ### Without Jekyll
 
 [examples/search_csv.rb](examples/search_csv.rb) searches a CSV catalog from

@@ -6,6 +6,7 @@ require_relative "cjk_index/tokenizer"
 require_relative "cjk_index/builder"
 require_relative "cjk_index/runtime"
 require_relative "cjk_index/searcher"
+require_relative "cjk_index/index_file"
 
 # Dictionary-free full-text search for Chinese, Japanese and Korean text:
 # build the index in Ruby, query it in Ruby (Searcher) or in the browser
