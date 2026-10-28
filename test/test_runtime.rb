@@ -146,6 +146,22 @@ class TestRuntime < Minitest::Test
     assert_match(/rebuild both together/, out)
   end
 
+  def test_index_and_script_must_use_the_same_table_contents
+    b = CJKIndex::Builder.new(fields: %w[title])
+    b.add("a", "title" => "圖書館")
+    stale = b.to_h.merge("variant_digest" => "0" * 16)
+    out = run_node(<<~JS, stale)
+      const c = require('./cjk-index.js');
+      const data = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+      try { new c.Index(data); console.log('"loaded"'); } catch (e) { console.log(JSON.stringify(e.message)); }
+    JS
+    assert_match(/other contents of the variant tables/, out)
+    assert_raises(ArgumentError) { CJKIndex::Searcher.new(stale) }
+    assert_raises(ArgumentError) { CJKIndex::Builder.load(stale) }
+    # the digest follows what the tables fold, so another table set differs
+    refute_equal CJKIndex::Normalizer.new(tables: %w[ja]).digest, CJKIndex::Normalizer.new(tables: %w[ja zh-safe]).digest
+  end
+
   def test_highlight_maps_back_to_original_text
     out = run_node(<<~JS, [])
       const c = require('./cjk-index.js');

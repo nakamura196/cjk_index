@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require "digest"
+require "json"
+
 module CJKIndex
   # Folds text so that spelling variants a reader treats as "the same" compare
   # equal: NFKC (full-width -> half-width etc.), lowercase, katakana ->
@@ -52,11 +55,28 @@ module CJKIndex
           .map { |line| line.split("\t")[0, 2] }
     end
 
-    attr_reader :tables, :variants
+    attr_reader :tables, :variants, :digest
 
     def initialize(tables: DEFAULT_TABLES)
       @tables = tables.map(&:to_s).uniq.freeze
       @variants = build_variants.freeze
+      # What the tables fold, not their names: an index built with an older
+      # "ja" table must not be read with a newer one.
+      @digest = Digest::SHA256.hexdigest(JSON.generate(@variants.sort)).slice(0, 16).freeze
+    end
+
+    # Raises unless data (an index) was built with the same tables as this
+    # normalizer. An index without a digest predates 1.0: it still loads, but
+    # it folded with older tables and should be rebuilt.
+    def check!(data)
+      if tables != data["variants"]
+        raise ArgumentError, "cjk_index: index built with variant tables #{data['variants'].inspect} " \
+                             "but this normalizer folds with #{tables.inspect}; rebuild both together"
+      end
+      return if data["variant_digest"].nil? || data["variant_digest"] == digest
+
+      raise ArgumentError, "cjk_index: index built with other contents of the variant tables " \
+                           "#{tables.inspect} (an older cjk_index?); rebuild it"
     end
 
     def normalize(text)

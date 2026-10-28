@@ -97,8 +97,10 @@ module CJKIndex
       end
 
       filters = (data["filters"] || {}).transform_values { |f| f.slice("kind", "separator") }
+      normalizer = Normalizer.new(tables: data["variants"])
+      normalizer.check!(data)
       builder = new(fields: data["fields"], boosts: data["fields"].zip(data["boosts"]).to_h,
-                    normalizer: Normalizer.new(tables: data["variants"]), filters: filters)
+                    normalizer: normalizer, filters: filters)
       builder.send(:restore, data)
       builder
     end
@@ -160,6 +162,7 @@ module CJKIndex
       h = {
         "format" => FORMAT,
         "variants" => @normalizer.tables,
+        "variant_digest" => @normalizer.digest,
         "fields" => @fields,
         "boosts" => @boosts.map { |b| b == b.to_i ? b.to_i : b },
         "refs" => live.map { |slot| @refs[slot] },
@@ -177,7 +180,8 @@ module CJKIndex
     # For Searcher: the current documents by slot, with nil for removed ones.
     def live_data # :nodoc:
       {
-        "variants" => @normalizer.tables, "fields" => @fields, "boosts" => @boosts,
+        "variants" => @normalizer.tables, "variant_digest" => @normalizer.digest,
+        "fields" => @fields, "boosts" => @boosts,
         "refs" => @refs, "lengths" => @lengths, "tokens" => @postings, "count" => @count,
         "filters" => @filters.to_h do |name, spec|
           [name, { "kind" => spec["kind"], "docs" => @filter_values.map { |v| v && v[name] } }]

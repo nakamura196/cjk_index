@@ -17,6 +17,7 @@ module CJKIndex
           # back-references and drop half of the regexp escapes.
           .sub("/*@VARIANTS@*/{}") { JSON.generate(normalizer.variants) }
           .sub("/*@TABLES@*/[]") { JSON.generate(normalizer.tables) }
+          .sub("/*@DIGEST@*/''") { JSON.generate(normalizer.digest) }
           .sub("/*@CJK@*/''") { JSON.generate(Tokenizer.char_class(Tokenizer::CJK_RANGES)) }
           .sub("/*@SEPARATOR@*/''") do
             JSON.generate(Tokenizer.char_class(Tokenizer::SEPARATOR_RANGES, Tokenizer::SEPARATOR_CHARS))
