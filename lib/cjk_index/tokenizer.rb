@@ -68,6 +68,36 @@ module CJKIndex
       phrases(text, unigrams: unigrams, normalizer: normalizer).flatten(1)
     end
 
+    # A run of separators, of CJK characters, or of other characters. A
+    # separator is never part of a run (・ is in the katakana block).
+    CJK_WORD = /[#{CJK.source[1..-2]}&&[^#{SEPARATOR.source[1..-2]}]]/
+    RUN = /(#{SEPARATOR.source}+)|(#{CJK_WORD.source}+)|((?:(?!#{SEPARATOR.source})(?!#{CJK.source}).)+)/m
+
+    # Yields each token of already normalized text with its offset: the
+    # tokens of tokens_with_offsets, without building the phrases. Used to
+    # build the index, where it is several times faster.
+    def each_token(normalized, unigrams: false)
+      offset = 0
+      normalized.scan(RUN) do |_, cjk, other|
+        run = Regexp.last_match(0)
+        if cjk
+          chars = run.chars
+          if chars.length == 1 || unigrams
+            chars.each_with_index { |c, i| yield c, offset + i }
+          end
+          i = 0
+          last = chars.length - 1
+          while i < last
+            yield chars[i] + chars[i + 1], offset + i
+            i += 1
+          end
+        elsif other
+          yield run, offset
+        end
+        offset += run.length
+      end
+    end
+
     # Splits at separators (spaces, punctuation) into phrases, each a list of
     # [token, offset]. A query matches when every phrase occurs somewhere in
     # the document, with the tokens of each phrase at the same relative offsets.

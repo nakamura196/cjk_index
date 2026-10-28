@@ -34,4 +34,16 @@ class TestTokenizer < Minitest::Test
     # ᄒᆞᆫ (arae-a, no precomposed syllable): three jamo, kept in one run
     assert_equal ["ᄒᆞ", "ᆞᆫ", "ᆫ글"], t("ᄒᆞᆫ글")
   end
+
+  def test_each_token_matches_tokens_with_offsets
+    ["東京帝國大學本部構内及農學部建物鳥瞰圖", "第1輯、IIIF「マニフェスト」 abc", "ᄒᆞᆫ글 소학언초", "𠮟る 佐々木\n\t改行",
+     "Hello, World! 羣芳圖譜", "a", "", "  ", "。。東。京", "日本語・英語", "ア・イ"].each do |text|
+      [true, false].each do |unigrams|
+        norm = CJKIndex.normalize(text)
+        tokens = []
+        CJKIndex::Tokenizer.each_token(norm, unigrams: unigrams) { |tok, offset| tokens << [tok, offset] }
+        assert_equal CJKIndex::Tokenizer.tokens_with_offsets(text, unigrams: unigrams), tokens, text
+      end
+    end
+  end
 end
