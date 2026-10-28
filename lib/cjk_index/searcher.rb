@@ -162,7 +162,7 @@ module CJKIndex
       docs.each do |doc|
         value = filter[:docs][doc]
         if filter[:kind] == "year" then counts[value] += 1 unless value.nil?
-        else value.each { |key| counts[key] += 1 }
+        else value.each { |id| counts[filter[:keys][id]] += 1 }
         end
       end
       counts.sort_by { |key, count| [-count, filter[:rank][key]] }
@@ -203,28 +203,33 @@ module CJKIndex
       @filters = (data["filters"] || {}).to_h { |name, f| [name, setup_filter(f)] }
     end
 
-    # Filter values by document: keys (value filters) or a year, with the
+    # Filter values by document: a year, or the ids of values (value
+    # filters), with the folded key of each id, the ids of each key, the
     # form to show for each key and its rank of first appearance.
     def setup_filter(f)
-      docs = if f["kind"] == "year" then f["docs"]
-             elsif f["values"]
-               keys = f["values"].map { |v| Builder.filter_key(v, @normalizer) }
-               f["docs"].map { |ids| ids.map { |id| keys[id] } }
-             else
-               f["docs"].map { |pairs| pairs&.map(&:first) }
-             end
-      display = {}
-      if f["values"] then f["values"].each { |v| display[Builder.filter_key(v, @normalizer)] ||= v }
-      elsif f["kind"] == "value" then f["docs"].each { |pairs| pairs&.each { |key, v| display[key] ||= v } }
+      if f["kind"] == "year"
+        rank = {}
+        f["docs"].each_with_index { |year, doc| rank[year] ||= rank.size if @refs[doc] && !year.nil? }
+        return { kind: "year", docs: f["docs"], display: rank.keys.to_h { |year| [year, year] }, rank: rank }
       end
-      rank = {}
-      docs.each_with_index do |value, doc|
-        next unless @refs[doc]
 
-        Array(value).each { |key| rank[key] ||= rank.size }
+      values = f["values"]
+      docs = f["docs"]
+      unless values
+        id_of = {}
+        values = []
+        docs = docs.map { |pairs| (pairs || []).map { |key, v| id_of[key] ||= (values << v).size - 1 } }
       end
-      display = rank.keys.to_h { |year| [year, year] } if f["kind"] == "year"
-      { kind: f["kind"], docs: docs, display: display, rank: rank }
+      keys = values.map { |v| Builder.filter_key(v, @normalizer) }
+      ids = Hash.new { |h, key| h[key] = [] }
+      keys.each_with_index { |key, id| ids[key] << id }
+      display = {}
+      values.each_with_index { |v, id| display[keys[id]] ||= v }
+      rank = {}
+      docs.each_with_index do |list, doc|
+        list.each { |id| rank[keys[id]] ||= rank.size } if @refs[doc]
+      end
+      { kind: f["kind"], docs: docs, keys: keys, ids: ids, display: display, rank: rank }
     end
 
     def refresh
@@ -245,8 +250,9 @@ module CJKIndex
                   end
           [f, ->(year) { !year.nil? && range.cover?(year) }]
         else
-          keys = Array(condition).map { |v| Builder.filter_key(v, @normalizer) }.to_set
-          [f, ->(values) { values.any? { |key| keys.include?(key) } }]
+          # Compares value ids, not folded strings.
+          ids = Array(condition).flat_map { |v| f[:ids].fetch(Builder.filter_key(v, @normalizer), []) }.to_set
+          [f, ->(list) { list.any? { |id| ids.include?(id) } }]
         end
       end
     end

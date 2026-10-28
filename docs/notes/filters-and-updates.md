@@ -583,3 +583,24 @@ write at once, it can be an option.
 
 Not checked: Windows (Puma has no workers there), and Puma's
 `fork_worker` mode.
+
+## 2026-10-28: value filters compare ids (issue #14)
+
+The mentor suggested comparing value filters by the ids the index already
+stores for each value, not by the folded strings. Ruby and the browser
+script now keep each document's value ids, and a condition becomes the set
+of ids whose folded key matches. Facets count by key, as before.
+
+`bench/updates.rb`, Aozora catalog (16,951 records), Ruby 4.0.1 with YJIT,
+two runs each:
+
+| | before | after |
+| --- | ---: | ---: |
+| filter only (author = 夏目漱石, 112 hits) | 2.74–2.78 ms | 1.74–1.76 ms |
+| search with filter (東京, year 1900–1920) | 0.67–0.68 ms | 0.62–0.64 ms |
+| facets over all records (author) | 3.2 ms | 3.1 ms |
+
+- The year filter does not change, so neither does the second row.
+- A prototype that tested a single id with `include?` instead of a set took
+  1.3 ms. Not kept: the set is simpler and the difference is 0.4 ms.
+- Not measured: the browser script.
