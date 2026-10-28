@@ -25,8 +25,15 @@ module CJKIndex
   #           date: year
   #       - name: search
   #         preset: collectionbuilder     # reads CollectionBuilder's own config
+  #       - name: texts
+  #         collection: texts
+  #         fields: [title, content]
+  #         split: true                   # -> assets/cjk-index/texts/index.json and shards
+  #         shard_size: 32000             # bytes per shard (optional)
   #
-  # The browser script is written to <output>/cjk-index.js.
+  # The browser script is written to <output>/cjk-index.js. A split index is
+  # loaded with CJKIndex.load('<output>/<name>/index.json') and searched with
+  # searchAsync, which fetches only the shards a query needs (see Builder).
   module Jekyll
     DEFAULT_OUTPUT = "assets/cjk-index"
     RUNTIME_NAME = "cjk-index.js"
@@ -61,9 +68,18 @@ module CJKIndex
         site.static_files << GeneratedFile.new(site, output, RUNTIME_NAME, Runtime.source(normalizer: normalizer))
         Array(config["indexes"]).each do |spec|
           builder = build(site, spec, normalizer)
-          name = "#{spec.fetch('name')}.json"
-          site.static_files << GeneratedFile.new(site, output, name, builder.to_json)
-          ::Jekyll.logger.info "cjk_index:", "#{output}/#{name} (#{builder.refs.length} documents)"
+          if spec["split"]
+            dir = "#{output}/#{spec.fetch('name')}"
+            files = builder.each_split_file(shard_size: Integer(spec.fetch("shard_size", Builder::SHARD_SIZE)))
+                           .map { |name, content| GeneratedFile.new(site, dir, name, content) }
+            site.static_files.concat(files)
+            ::Jekyll.logger.info "cjk_index:", "#{dir}/#{Builder::MANIFEST} (#{builder.refs.length} documents, " \
+                                               "#{files.length - 1} shards)"
+          else
+            name = "#{spec.fetch('name')}.json"
+            site.static_files << GeneratedFile.new(site, output, name, builder.to_json)
+            ::Jekyll.logger.info "cjk_index:", "#{output}/#{name} (#{builder.refs.length} documents)"
+          end
         end
       end
 

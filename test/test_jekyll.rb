@@ -75,4 +75,18 @@ class TestJekyll < Minitest::Test
       assert_includes File.read(File.join(dest, "assets/cjk-index/cjk-index.js")), '["ja","zh"]'
     end
   end
+
+  def test_split_option
+    spec = { "name" => "items", "data" => "demo-metadata", "ref" => "objectid", "fields" => %w[title],
+             "split" => true, "shard_size" => 100 }
+    build("cjk_index" => { "indexes" => [spec] }) do |dest|
+      dir = File.join(dest, "assets/cjk-index/items")
+      manifest = JSON.parse(File.read(File.join(dir, "index.json")))
+      assert_equal %w[item1 item2 child1], manifest["refs"]
+      assert_operator manifest["shards"].length, :>, 1
+      assert_equal manifest["shards"].map(&:last).sort, (Dir.children(dir) - ["index.json"]).sort
+      refute File.exist?(File.join(dest, "assets/cjk-index/items.json"))
+      assert_equal %w[item1], CJKIndex::Searcher.load(dir).search("鳥瞰").map { |r| r[:ref] }
+    end
+  end
 end
