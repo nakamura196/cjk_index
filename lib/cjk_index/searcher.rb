@@ -46,10 +46,7 @@ module CJKIndex
       end
 
       @normalizer = normalizer || Normalizer.new(tables: data["variants"])
-      if @normalizer.tables != data["variants"]
-        raise ArgumentError, "cjk_index: index built with variant tables #{data['variants'].inspect} " \
-                             "but this normalizer folds with #{@normalizer.tables.inspect}; rebuild both together"
-      end
+      @normalizer.check!(data)
 
       setup(data)
     end

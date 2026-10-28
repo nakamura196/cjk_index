@@ -5,3 +5,20 @@ data/zh-hant-hans.tsv is derived from OpenCC (https://github.com/BYVoid/OpenCC),
 data/dictionary/TSCharacters.txt, Copyright (c) 2010-2026 Carbo Kuo and contributors,
 licensed under the Apache License, Version 2.0 (see LICENSE-OpenCC).
 Changes are described at the top of that file.
+
+data/zh-hant-hans-safe.tsv is derived from OpenCC data/dictionary/TSCharacters.txt and
+STCharacters.txt, under the same license and copyright as above.
+
+data/ja-kyujitai.tsv is derived in part from the Unicode Han Database (Unihan), Unicode 18.0.0
+(https://www.unicode.org/Public/18.0.0/ucd/Unihan.zip), Copyright (c) 1991-2026 Unicode, Inc.,
+licensed under the Unicode License v3 (see LICENSE-Unicode). The fields used (kJapaneseOldVariant,
+kJoyoKanji, kJinmeiyoKanji, kZVariant) record the Joyo Kanji Table (Cabinet Notice No. 2 of 2010)
+and the Jinmeiyo Kanji of the Family Register Act Enforcement Regulations, which as official
+notices and ordinances are not subject to copyright in Japan (Copyright Act, art. 13).
+
+data/ko-hanyang-pua.tsv is converted from the table in the hypua crate by kiwiyou
+(https://github.com/kiwiyou/hypua, commit 7e47655730d4cfea89564768ebb277b86072eef9), which its
+author released under the Unlicense (a public domain dedication). The mapping is the same as that
+of hypua2jamo by mete0r (LGPL-3.0-or-later code); both are based on the KTUG Hanyang PUA Table
+Project (http://faq.ktug.org/faq/HanyangPuaTableProject), which states no license. See
+docs/notes/variant-tables.md.
