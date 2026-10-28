@@ -10,7 +10,8 @@ require "tmpdir"
 class TestRuntime < Minitest::Test
   SAMPLES = [
     "東京帝國大學本部構内及農學部建物鳥瞰圖", "サクラ", "ＩＩＩＦ　２０２４", "佐々木",
-    "第1輯、IIIF「マニフェスト」", "서울대학교 도서관", "Hello, World! 羣芳圖譜", "𠮟る", "ᄒᆞᆫ글 소학언초", ""
+    "第1輯、IIIF「マニフェスト」", "서울대학교 도서관", "Hello, World! 羣芳圖譜", "𠮟る", "ᄒᆞᆫ글 소학언초",
+    "珊\u{E0100}瑚の葛\u{FE00}飾", "佐\u{E0101}々木", ""
   ].freeze
 
   def setup
@@ -175,6 +176,20 @@ class TestRuntime < Minitest::Test
     assert_equal "東京<mark>帝國大學</mark>&lt;b&gt;", out[0]
     assert_equal "<mark>サクラ</mark>と<mark>桜</mark>", out[1]
     assert_equal "…ああああああ<mark>鳥瞰圖</mark>いいいいいいいいいいい…", out[2]
+  end
+
+  def test_highlight_keeps_a_variation_selector_with_its_character
+    out = run_node(<<~JS, [])
+      const c = require('./cjk-index.js');
+      console.log(JSON.stringify([
+        c.highlight('珊\u{E0100}瑚', '珊瑚'),
+        c.highlight('珊\u{E0100}瑚', '珊'),
+        c.highlight('葛\uFE00飾北斎', '飾')
+      ]));
+    JS
+    assert_equal ["<mark>珊\u{E0100}瑚</mark>", "<mark>珊\u{E0100}</mark>瑚", "葛\u{FE00}<mark>飾</mark>北斎"], out
+    assert_equal out, [CJKIndex.highlight("珊\u{E0100}瑚", "珊瑚"), CJKIndex.highlight("珊\u{E0100}瑚", "珊"),
+                       CJKIndex.highlight("葛\u{FE00}飾北斎", "飾")]
   end
 
   def test_words_named_like_object_members
