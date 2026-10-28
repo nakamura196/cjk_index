@@ -76,6 +76,15 @@ class TestJekyll < Minitest::Test
     end
   end
 
+  def test_variants_table_file_relative_to_the_site
+    tables = %w[ja ../variants/itaiji.tsv]
+    build("cjk_index" => { "variants" => tables, "indexes" => [{ "name" => "search", "preset" => "collectionbuilder" }] }) do |dest|
+      index = JSON.parse(File.read(File.join(dest, "assets/cjk-index/search.json")))
+      assert_equal tables, index["variants"]
+      assert_includes File.read(File.join(dest, "assets/cjk-index/cjk-index.js")), '"與":"与"'
+    end
+  end
+
   def test_split_option
     spec = { "name" => "items", "data" => "demo-metadata", "ref" => "objectid", "fields" => %w[title],
              "split" => true, "shard_size" => 100 }

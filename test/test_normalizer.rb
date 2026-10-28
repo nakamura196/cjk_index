@@ -108,6 +108,43 @@ class TestNormalizer < Minitest::Test
     assert_raises(ArgumentError) { CJKIndex::Normalizer.new(tables: %w[xx]) }
   end
 
+  FIXTURES = File.expand_path("fixtures/variants", __dir__)
+
+  def test_table_file_of_your_own
+    custom = CJKIndex::Normalizer.new(tables: %w[itaiji.tsv], base: FIXTURES)
+    assert_equal "与 宴宴 嶋嶋嶋", custom.normalize("與 醼讌 嶌島嶋")
+    assert_equal "株式会社", custom.normalize("㍿") # NFKC already did it; the line adds nothing
+    assert_equal %w[itaiji.tsv], custom.tables
+  end
+
+  def test_table_file_combines_with_built_in_tables
+    # 嶋 and 島 are linked by ja too; the table listed first picks the form
+    assert_equal "島 与", CJKIndex::Normalizer.new(tables: %w[ja itaiji.tsv], base: FIXTURES).normalize("嶌 與")
+    assert_equal "嶋 与", CJKIndex::Normalizer.new(tables: %w[itaiji.tsv ja], base: FIXTURES).normalize("嶌 與")
+  end
+
+  def test_table_file_digest_follows_its_contents
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "t.tsv"), "与\t與\n")
+      before = CJKIndex::Normalizer.new(tables: %w[t.tsv], base: dir).digest
+      File.write(File.join(dir, "t.tsv"), "与\t與\n宴\t醼\n")
+      refute_equal before, CJKIndex::Normalizer.new(tables: %w[t.tsv], base: dir).digest
+    end
+  end
+
+  def test_table_file_cells_after_the_first_are_one_character
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "t.tsv"), "# comment\n与\t與\n宴\t醼讌\n")
+      error = assert_raises(ArgumentError) { CJKIndex::Normalizer.new(tables: %w[t.tsv], base: dir) }
+      assert_match(/t\.tsv:3: "醼讌"/, error.message)
+    end
+  end
+
+  def test_missing_table_file
+    error = assert_raises(ArgumentError) { CJKIndex::Normalizer.new(tables: %w[nothing.tsv], base: FIXTURES) }
+    assert_match(/no file at .*nothing\.tsv/, error.message)
+  end
+
   def test_nil_is_empty
     assert_equal "", n(nil)
   end

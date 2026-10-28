@@ -175,3 +175,52 @@ marks. Tests: `test_highlight_*` in test/test_runtime.rb (two of them fail on
 - Index files do not record a digest of the tables, so an index built with the
   0.1 `ja` table and searched with this one can miss the 121 new pairs and
   still match the 3 dropped ones until it is rebuilt.
+
+## 2026-10-28: tables of your own
+
+Why: the specialist review planned for the tables cannot settle how wide a
+site should fold, because that depends on the material. A Chinese-classics
+catalogue built earlier with Elasticsearch shows it: one database folded a
+list of a few thousand groups maintained by its librarians, a sister database
+used a much wider synonym list (家 with 像, 宴 with 燕), and the two gave
+different results for the same query. So the shipped tables stay narrow and a
+site can bring its own list.
+
+What: any `variants` entry that is not a built-in name is a file, relative to
+the site's folder (Jekyll, Bridgetown) or the current folder. Format: one
+group per line, tab-separated, the target first (the format such itaiji lists
+already have; Elasticsearch mapping char_filters use the same idea). Cells are
+folded before use (NFKC etc.), so a compatibility ideograph is not silently
+dead, and a cell that NFKC already turns into the target (㍿ → 株式会社) is
+dropped. Variant cells must be one character after folding: the normalizer
+replaces single characters. The index records the entry as written, never the
+absolute path (it is published). The 1.0 digest already covers table
+contents, so an edited file makes old indexes fail to load instead of
+silently missing matches.
+
+Wider sources checked for shipping, and why not:
+
+- CHISE / cjkvi-variants (github.com/cjkvi/cjkvi-variants, about 51,700
+  pairs): the widest; the files carry "Copyright (c) 2014 CJKVI Database" and
+  the repository has no licence file (checked 2026-10-28), so it cannot be
+  redistributed in the gem. Its koseki-variants.txt links 宴 and 燕. A site may use it as its
+  own table after checking the terms.
+- 表外漢字字体表 (2000, Council on the National Language report): an official
+  text, usable, but it has only 22 simplified-form pairs (hyogai/variant in
+  cjkvi-variants' hyogai-variants.txt); not added yet.
+- GlyphWiki: its dump (name | related | data) has no variant sets; `related`
+  maps a glyph to one Unicode character.
+
+Tests: test_normalizer (format, combining with ja, digest, errors),
+test_runtime (Ruby and the browser fold a table file identically),
+test_jekyll (path relative to the site), test_updates (load with normalizer:).
+108 runs pass (the 2 Bridgetown ones skip in the main bundle and pass with
+gemfiles/bridgetown.gemfile).
+
+Size with a list of thousands of pairs, measured with cjkvi-variants.txt
+(3,105 pairs, "variant,cjkvi/variant,target" turned into "target<TAB>variant";
+used locally only, not shipped): `ja` alone 409 map entries, the table built
+in 0.01 s, browser script 11.2 KB (gzip -9 of the generated script; README's
+9.0 KB is measured differently); `ja` + the list 3,467 entries, 0.05 s,
+28.7 KB. So about 6 bytes gzipped per entry. That list folds 燕 to 㷼, not to
+宴, so it does not merge 宴 and 燕 by itself.

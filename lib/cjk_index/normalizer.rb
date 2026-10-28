@@ -24,10 +24,19 @@ module CJKIndex
   # With several tables, characters linked by any table fold to one form,
   # preferring the target of the table listed first: with [ja, zh],
   # 圖, 図 and 图 all become 図.
+  # Any other entry names a table file of your own, relative to base (the
+  # site's folder for Jekyll and Bridgetown, the current folder otherwise).
+  # The index records the entry as written, not the resolved path.
   #
   # Table format: UTF-8 lines "variant<TAB>folded", optionally followed by
   # another tab and a comment column; lines starting with "#" are comments.
   # "folded" may be several characters.
+  #
+  # Your own table is one group per line, tab-separated: the form to fold to,
+  # then its variants, one character each (the format of the itaiji lists
+  # that collection databases keep). Each cell is folded first (NFKC,
+  # lowercase, katakana -> hiragana), so a compatibility ideograph such as
+  # U+F900 joins the group of the character NFKC makes of it.
   class Normalizer
     DATA_DIR = File.expand_path("../../data", __dir__)
     TABLES = {
@@ -48,11 +57,38 @@ module CJKIndex
       @default ||= new
     end
 
-    def self.read_table(name)
-      file = TABLES.fetch(name) { raise ArgumentError, "unknown variant table #{name.inspect} (#{TABLES.keys.join(', ')})" }
-      File.readlines(File.join(DATA_DIR, file), chomp: true, encoding: "UTF-8")
-          .reject { |line| line.empty? || line.start_with?("#") }
-          .map { |line| line.split("\t")[0, 2] }
+    # Pairs [variant, folded] of a built-in table, or of a table file of your
+    # own (a name that is not built in, resolved against base).
+    def self.read_table(name, base: Dir.pwd)
+      return read_groups(name, File.expand_path(name, base)) unless TABLES.key?(name)
+
+      lines(File.join(DATA_DIR, TABLES[name])).map { |_, line| line.split("\t")[0, 2] }
+    end
+
+    def self.lines(path) # :nodoc:
+      File.readlines(path, chomp: true, encoding: "UTF-8").each_with_index
+          .reject { |line, _| line.strip.empty? || line.start_with?("#") }
+          .map { |line, i| [i + 1, line.delete_prefix("\uFEFF")] }
+    end
+
+    def self.read_groups(name, path) # :nodoc:
+      unless File.file?(path)
+        raise ArgumentError, "unknown variant table #{name.inspect}: not one of #{TABLES.keys.join(', ')}, " \
+                             "and no file at #{path}"
+      end
+
+      plain = new(tables: [])
+      lines(path).flat_map do |number, line|
+        target, *variants = line.split("\t").map(&:strip).reject(&:empty?).map { |cell| plain.normalize(cell) }
+        variants = variants.uniq.reject { |v| v == target } # NFKC may already fold a cell (㍿)
+        variants.each do |v|
+          next if v.length == 1
+
+          raise ArgumentError, "#{name}:#{number}: #{v.inspect} is not one character; " \
+                               "only the first cell (the form to fold to) may be longer"
+        end
+        variants.map { |v| [v, target] }
+      end
     end
 
     attr_reader :tables, :variants, :digest
@@ -60,8 +96,9 @@ module CJKIndex
     KATAKANA = "#{KATAKANA_FIRST.chr(Encoding::UTF_8)}-#{KATAKANA_LAST.chr(Encoding::UTF_8)}"
     HIRAGANA = "#{(KATAKANA_FIRST - KANA_OFFSET).chr(Encoding::UTF_8)}-#{(KATAKANA_LAST - KANA_OFFSET).chr(Encoding::UTF_8)}"
 
-    def initialize(tables: DEFAULT_TABLES)
+    def initialize(tables: DEFAULT_TABLES, base: Dir.pwd)
       @tables = tables.map(&:to_s).uniq.freeze
+      @base = base
       @variants = build_variants.freeze
       keys = @variants.keys.select { |k| k.length == 1 }
       @variant_chars = keys.empty? ? nil : Regexp.new("[#{keys.map { |k| format('\\u{%x}', k.ord) }.join}]")
@@ -122,7 +159,7 @@ module CJKIndex
       end
       rank = {}
       @tables.each_with_index do |name, priority|
-        self.class.read_table(name).each do |from, to|
+        self.class.read_table(name, base: @base).each do |from, to|
           parent[find.call(from)] = find.call(to)
           rank[to] = [rank.fetch(to, [priority, to.ord]), [priority, to.ord]].min
         end

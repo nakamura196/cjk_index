@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- `variants` also takes table files of your own: one group per line,
+  tab-separated, the form to fold to first (the format of the itaiji lists
+  that collection databases keep). Paths are relative to the site's folder
+  (Jekyll, Bridgetown) or the current folder; the index records the path as
+  written and a digest of the contents. `Builder.load` and `Builder.read`
+  take `normalizer:` to read such an index from another folder.
+- `Searcher.new(builder)` folds with the builder's normalizer.
+
 ## 1.0.0 (2026-10-28)
 
 Indexes built with 0.x should be rebuilt: the `ja` table changed, and the

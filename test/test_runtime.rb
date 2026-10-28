@@ -87,10 +87,11 @@ class TestRuntime < Minitest::Test
   def test_all_tables_match_ruby
     samples = [
       "國立故宮博物院", "皇后 以後", "頭髮 發展", "證明書 頰 𠮟る 禱", "가\uE97D[歌辭]", "경\uF1FC십이월",
-      "\u1112\u1161\u11AB\u1100\u1173\u11AF 한글 ㅎㅏㄴ", "\uE3A8셩훈몽젼", "\uF537\uE97D々", "\uF914", "ｶﾞｲﾄﾞ"
+      "\u1112\u1161\u11AB\u1100\u1173\u11AF 한글 ㅎㅏㄴ", "\uE3A8셩훈몽젼", "\uF537\uE97D々", "\uF914", "ｶﾞｲﾄﾞ", "與 醼讌 嶌島"
     ]
-    [%w[ja zh-safe ko], %w[zh ja], %w[ko], %w[zh-safe]].each do |tables|
-      normalizer = CJKIndex::Normalizer.new(tables: tables)
+    fixtures = File.expand_path("fixtures/variants", __dir__)
+    [%w[ja zh-safe ko], %w[zh ja], %w[ko], %w[zh-safe], %w[itaiji.tsv ja]].each do |tables|
+      normalizer = CJKIndex::Normalizer.new(tables: tables, base: fixtures)
       js = run_node(<<~JS, samples, normalizer: normalizer)
         const c = require('./cjk-index.js');
         const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
