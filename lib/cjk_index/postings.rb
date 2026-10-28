@@ -67,43 +67,45 @@ module CJKIndex
       out
     end
 
-    # [[key, [n, gap, gap, ...]], ...]: the entries with absolute keys and the
-    # positions still as written.
-    def entries(str)
-      nums = numbers(str)
-      out = []
+    # Yields key, start, body and stop for each entry: its key, and the byte
+    # offsets where the entry starts, where its key gap ends and where it
+    # ends. Loops over bytes rather than numbers, so that the changes below
+    # can copy the rest of a list as it is.
+    def each_entry(str)
+      return enum_for(:each_entry, str) unless block_given?
+
       key = -1
       i = 0
-      while i < nums.length
-        key += nums[i] + 1
-        n = nums[i + 1]
-        out << [key, nums[i + 1, n + 1]]
-        i += 2 + n
+      len = str.bytesize
+      while i < len
+        start = i
+        acc = 0
+        while (d = DIGIT[str.getbyte(i)]) >= LAST
+          acc = (acc * LEAD) + d - LAST
+          i += 1
+        end
+        key += (acc * LAST) + d + 1
+        i += 1
+        body = i
+        acc = 0
+        while (d = DIGIT[str.getbyte(i)]) >= LAST
+          acc = (acc * LEAD) + d - LAST
+          i += 1
+        end
+        n = (acc * LAST) + d
+        i += 1
+        while n.positive?
+          n -= 1 if DIGIT[str.getbyte(i)] < LAST
+          i += 1
+        end
+        yield key, start, body, i
       end
-      out
-    end
-
-    # The list for entries as returned by entries.
-    def from_entries(entries)
-      out = +""
-      last = -1
-      entries.each do |key, rest|
-        out << number(key - last - 1)
-        rest.each { |v| out << number(v) }
-        last = key
-      end
-      out
     end
 
     # Key of the last entry, -1 for an empty list.
     def last_key(str)
-      nums = numbers(str)
       key = -1
-      i = 0
-      while i < nums.length
-        key += nums[i] + 1
-        i += 2 + nums[i + 1]
-      end
+      each_entry(str) { |k| key = k }
       key
     end
 
@@ -111,14 +113,57 @@ module CJKIndex
     def each_key(str)
       return enum_for(:each_key, str) unless block_given?
 
-      nums = numbers(str)
-      key = -1
-      i = 0
-      while i < nums.length
-        key += nums[i] + 1
-        yield key
-        i += 2 + nums[i + 1]
+      each_entry(str) { |key| yield key }
+    end
+
+    # The list without the entries whose keys are in range (consecutive).
+    def delete(str, range)
+      before = -1
+      from = nil
+      each_entry(str) do |key, start, body|
+        if range.cover?(key)
+          from ||= start
+        elsif from
+          return str.byteslice(0, from) + number(key - before - 1) + str.byteslice(body..)
+        elsif key > range.end
+          return str
+        else
+          before = key
+        end
       end
+      from ? str.byteslice(0, from) : str
+    end
+
+    # The list with an entry for key (not yet in it) and offsets inserted in order.
+    def insert(str, key, offsets)
+      before = -1
+      each_entry(str) do |k, start, body|
+        if k > key
+          entry = append(+"", key - before - 1, offsets)
+          return str.byteslice(0, start) + entry + number(k - key - 1) + str.byteslice(body..)
+        end
+        before = k
+      end
+      append(+str, key - before - 1, offsets)
+    end
+
+    # The list with each key's document replaced by numbering[document], which
+    # keeps the order (removed documents have no entries).
+    def renumber(str, fields, numbering)
+      out = +""
+      old_before = -1
+      new_before = -1
+      copied = 0 # str up to here is in out or to be copied as it is
+      each_entry(str) do |key, start, body|
+        new_key = (numbering[key / fields] * fields) + (key % fields)
+        if new_key - new_before != key - old_before
+          out << str.byteslice(copied, start - copied) << number(new_key - new_before - 1)
+          copied = body
+        end
+        old_before = key
+        new_before = new_key
+      end
+      copied.zero? ? str : out << str.byteslice(copied..)
     end
 
     # The flat list of format 3, [doc, field, n, pos, ..., doc, ...].

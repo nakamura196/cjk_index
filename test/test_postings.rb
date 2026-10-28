@@ -21,10 +21,24 @@ class TestPostings < Minitest::Test
     flat = [0, 0, 1, 3, 0, 2, 2, 5, 70_000, 4, 1, 3, 1, 2, 3]
     s = P.encode(flat, 3)
     assert_equal flat, P.decode(s, 3)
-    assert_equal [[0, [1, 3]], [2, [2, 5, 69_995]], [13, [3, 1, 1, 1]]], P.entries(s)
-    assert_equal s, P.from_entries(P.entries(s))
     assert_equal 13, P.last_key(s)
     assert_equal [0, 2, 13], P.each_key(s).to_a
     assert_equal(-1, P.last_key(""))
+  end
+
+  def test_changes
+    s = P.encode([0, 0, 1, 3, 0, 2, 2, 5, 70_000, 4, 1, 3, 1, 2, 3, 6, 0, 1, 9], 3)
+    flat = ->(str) { P.decode(str, 3) }
+    assert_equal [4, 1, 3, 1, 2, 3, 6, 0, 1, 9], flat.(P.delete(s, 0..2))
+    assert_equal [0, 0, 1, 3, 0, 2, 2, 5, 70_000, 6, 0, 1, 9], flat.(P.delete(s, 12..14))
+    assert_equal [0, 0, 1, 3, 0, 2, 2, 5, 70_000, 4, 1, 3, 1, 2, 3], flat.(P.delete(s, 18..20))
+    assert_same s, P.delete(s, 3..5)
+    assert_equal "", P.delete(P.encode([2, 1, 1, 0], 3), 6..8)
+    assert_equal [0, 0, 1, 3, 0, 2, 2, 5, 70_000, 2, 0, 2, 7, 8, 4, 1, 3, 1, 2, 3, 6, 0, 1, 9],
+                 flat.(P.insert(s, 6, [7, 8]))
+    assert_equal [0, 0, 1, 3, 0, 2, 2, 5, 70_000, 4, 1, 3, 1, 2, 3, 6, 0, 1, 9, 7, 1, 1, 0], flat.(P.insert(s.dup, 22, [0]))
+    assert_equal [0, 0, 1, 3, 0, 2, 2, 5, 70_000, 1, 1, 3, 1, 2, 3, 2, 0, 1, 9],
+                 flat.(P.renumber(s, 3, [0, nil, nil, nil, 1, nil, 2]))
+    assert_same s, P.renumber(s, 3, (0..6).to_a)
   end
 end
