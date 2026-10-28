@@ -1,0 +1,24 @@
+# Japanese variants not covered by the official lists that script/variant_tables.rb reads
+# (Joyo Kanji Table brackets, Jinmeiyo Kanji table, Unihan kZVariant).
+# Written for cjk_index (MIT). One pair per line: variant <TAB> form to fold to.
+# Each is a glyph variant (Kangxi form or common non-standard form) of one character,
+# so a reader treats the two as the same character.
+內	内
+册	冊
+冩	写
+姬	姫
+寳	宝
+桒	桑
+沒	没
+淸	清
+牀	床
+甞	嘗
+聰	聡
+舍	舎
+邉	辺
+靑	青
+飮	飲
+峯	峰
+嶋	島
+萠	萌
+槇	槙
