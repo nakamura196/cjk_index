@@ -84,6 +84,57 @@ class TestRuntime < Minitest::Test
     assert_equal [%w[ja zh], samples.map { |s| zh.normalize(s) }], js
   end
 
+  def test_all_tables_match_ruby
+    samples = [
+      "國立故宮博物院", "皇后 以後", "頭髮 發展", "證明書 頰 𠮟る 禱", "가\uE97D[歌辭]", "경\uF1FC십이월",
+      "\u1112\u1161\u11AB\u1100\u1173\u11AF 한글 ㅎㅏㄴ", "\uE3A8셩훈몽젼", "\uF537\uE97D々", "\uF914", "ｶﾞｲﾄﾞ"
+    ]
+    [%w[ja zh-safe ko], %w[zh ja], %w[ko], %w[zh-safe]].each do |tables|
+      normalizer = CJKIndex::Normalizer.new(tables: tables)
+      js = run_node(<<~JS, samples, normalizer: normalizer)
+        const c = require('./cjk-index.js');
+        const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+        console.log(JSON.stringify([c.tables, input.map(s => [c.normalize(s), c.phrases(s, true)])]));
+      JS
+      ruby = samples.map { |s| [normalizer.normalize(s), CJKIndex::Tokenizer.phrases(s, unigrams: true, normalizer: normalizer)] }
+      assert_equal [tables, ruby], js, tables.join(",")
+    end
+  end
+
+  def test_highlight_old_hangul_in_the_private_use_area
+    out = run_node(<<~JS, [], normalizer: CJKIndex::Normalizer.new(tables: %w[ja ko]))
+      const c = require('./cjk-index.js');
+      console.log(JSON.stringify([
+        c.highlight('가\uE97D[歌辭]', '가\u1109\u119E'),
+        c.highlight('가\u1109\u119E[歌辭]', '가\uE97D'),
+        c.highlight('경\uF1FC십이월', '\u110C\u119E'),
+        c.highlight('경\uF1FC십이월', '\u119E십'),
+        c.highlight('경\uF1FC십이월', '\uF1FC')
+      ]));
+    JS
+    assert_equal "<mark>가\uE97D</mark>[歌辭]", out[0], "query typed in standard jamo"
+    assert_equal "<mark>가\u1109\u119E</mark>[歌辭]", out[1], "query in PUA, text in jamo"
+    assert_equal "경<mark>\uF1FC</mark>십이월", out[2]
+    assert_equal "경<mark>\uF1FC십</mark>이월", out[3], "a match that starts inside the PUA character marks all of it"
+    assert_equal "경<mark>\uF1FC</mark>십이월", out[4]
+  end
+
+  def test_highlight_composed_and_decomposed_hangul
+    out = run_node(<<~JS, [])
+      const c = require('./cjk-index.js');
+      console.log(JSON.stringify([
+        c.highlight('\u1112\u1161\u11AB\u1100\u1173\u11AF 문자', '한글'),
+        c.highlight('한글 문자', '\u1112\u1161\u11AB\u1100\u1173\u11AF'),
+        c.highlight('ｶﾞｲﾄﾞ', 'がいど'),
+        c.highlight('cafe\u0301', 'café')
+      ]));
+    JS
+    assert_equal "<mark>\u1112\u1161\u11AB\u1100\u1173\u11AF</mark> 문자", out[0]
+    assert_equal "<mark>한글</mark> 문자", out[1]
+    assert_equal "<mark>ｶﾞｲﾄﾞ</mark>", out[2]
+    assert_equal "<mark>cafe\u0301</mark>", out[3]
+  end
+
   def test_index_and_script_must_use_the_same_tables
     b = CJKIndex::Builder.new(fields: %w[title], normalizer: CJKIndex::Normalizer.new(tables: %w[ja zh]))
     b.add("a", "title" => "圖書館")
