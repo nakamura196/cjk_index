@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.1 (2026-10-28)
 
 - Variation selectors (U+FE00–U+FE0F and the ideographic U+E0100–U+E01EF)
   are dropped when folding: 「珊」 followed by an ideographic variation
