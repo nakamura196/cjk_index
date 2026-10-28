@@ -20,7 +20,7 @@ lunr for comparison: [compare.html](https://nakamura196.github.io/cb-ja-demo/com
 | | lunr.js | cjk_index |
 |---|---|---|
 | Where the index is built | in the browser, on every page load (or prebuilt with Node) | in Ruby, at build time |
-| What the browser downloads | the records (a JS or JSON store) and lunr.js (about 8.4 KB gzipped) | the index JSON and `cjk-index.js` (about 6.5 KB gzipped with the Japanese table) |
+| What the browser downloads | the records (a JS or JSON store) and lunr.js (about 8.4 KB gzipped) | the index JSON and `cjk-index.js` (about 9 KB gzipped with the Japanese table) |
 | CJK text | trimmed to nothing with the default pipeline | overlapping bigrams with positions: a query matches where it occurs as a substring |
 | Variants | none (stemming for English) | NFKC, case, katakana/hiragana, old/new kanji forms, optionally Traditional/Simplified Chinese |
 | Ranking | BM25 | BM25 per field, with field boosts |
@@ -183,12 +183,14 @@ sites.
 
 ## Things to check after switching
 
-- Index size. The index is prebuilt and includes positions: about 5 bytes
-  per character of indexed text, gzipped. A catalog of titles and short
-  fields stays small (the 69 records of cb-ja-demo, with descriptions and
-  page transcriptions: 44 KB; 16,951 Aozora Bunko titles, authors and
-  openings: 19 MB). Index long full text with care; see
-  [bench/README.md](../bench/README.md).
+- Index size. The index is prebuilt and includes positions. A catalog of
+  titles and short fields stays small (the 69 records of cb-ja-demo, with
+  descriptions and page transcriptions: 44 KB gzipped; 16,951 Aozora Bunko
+  titles, authors and openings: 12.9 MB). For a larger index or full text,
+  set `split: true`: the browser then loads a small manifest and fetches
+  only the parts a query needs (about 40 KB per query), and the page calls
+  `await index.searchAsync(query)` instead of `index.search(query)`. See
+  [the README](../README.md#large-collections-split-indexes).
 - The browser script and the index must be built with the same variant
   tables. The Jekyll plugin writes both; outside Jekyll, write them together.
   The script refuses an index built with other tables.

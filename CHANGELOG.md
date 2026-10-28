@@ -1,5 +1,61 @@
 # Changelog
 
+## 1.0.0 (unreleased)
+
+Indexes built with 0.x should be rebuilt: the `ja` table changed, and the
+index now records a digest of its tables (see below). Formats 2 and 3 are
+still read.
+
+Large collections:
+
+- Index format `cjk_index/4`: posting lists as compact strings (about a third
+  smaller gzipped, three times smaller before compression).
+- Split indexes: `Builder#write_split(dir, shard_size:)` and
+  `Builder#each_split_file` write a manifest and shards of about 32 KB; the
+  browser fetches shards as queries need them (`index.searchAsync`,
+  `index.prepare`). `CJKIndex.load` and `Searcher.load` read a split index;
+  Jekyll: `split: true`.
+- `Builder#write(path)` writes one file without building the JSON in memory;
+  `Builder.read(path)` reads a file or a split index.
+- Building keeps posting lists encoded and normalizes faster: 3,000 full
+  texts take 0.56 GB instead of 2.3 GB at peak, and 37 s instead of 62 s.
+- Updating a loaded index is slower without YJIT (one update about 0.25 s at
+  17,000 records); one update and its write in `IndexFile` cost about the
+  same as before.
+
+Variant tables:
+
+- `ja`: 409 pairs (was 291), generated from the Jōyō Kanji Table, the
+  Jinmeiyō kanji list and Unihan kZVariant. 籐/藤, 聯/連 and 彎/湾 no longer
+  fold.
+- New opt-in tables: `zh-safe` (Traditional/Simplified pairs that are
+  one-to-one both ways, so 後/后 and 發/髮 stay apart) and `ko` (old Hangul
+  in the Hanyang Private Use Area to standard jamo). `zh` is unchanged.
+- `script/variant_tables.rb` generates the tables from their sources.
+- The index records `variant_digest`, a digest of what its tables fold; Ruby
+  and the browser script refuse an index whose digest differs.
+- The browser highlights matches in conjoining jamo, half-width kana with
+  sound marks and old Hangul in the Private Use Area.
+
+More ways to build an index:
+
+- `cjk_index` command: `build` (CSV, JSON or JSON Lines), `search`, `runtime`.
+- `CJKIndex::RakeTask`.
+- Bridgetown 2 plugin (`require "cjk_index/bridgetown"`).
+- Examples for Bridgetown and Rails (`examples/`), notes in
+  `docs/notes/adapters.md`.
+- Migration guide from lunr.js, in English and Japanese
+  (`docs/migrating-from-lunr.md`).
+
+Fixes:
+
+- A `year` filter on a Time or Date (Jekyll gives a post's `date` as a Time)
+  gave no year.
+- The Jekyll plugin gave the builder only the index fields of a collection
+  document, so a filter on another front-matter field was empty.
+- A query word named like a JavaScript object member ("constructor") scored
+  differently in the browser than in Ruby.
+
 ## 0.2.0 (2026-10-28)
 
 - Filters: `Builder.new(filters:)` with `value` and `year` filters;

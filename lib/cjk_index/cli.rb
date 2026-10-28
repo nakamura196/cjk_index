@@ -73,7 +73,7 @@ module CJKIndex
           name, spec = parse_filter(v)
           opts[:filters][name] = spec
         end
-        o.on("--variants LIST", Array, "variant tables: ja (default), zh") { |v| opts[:variants] = v }
+        o.on("--variants LIST", Array, "variant tables: ja (default), zh-safe, zh, ko") { |v| opts[:variants] = v }
         o.on("-o", "--output PATH", "index file (default: standard output)") { |v| output = v }
         o.on("--runtime PATH", "also write the browser script for these variants") { |v| runtime = v }
       end
@@ -196,7 +196,7 @@ module CJKIndex
       output = nil
       OptionParser.new do |o|
         o.banner = "Usage: cjk_index runtime [options]"
-        o.on("--variants LIST", Array, "variant tables: ja (default), zh; must match the index") { |v| variants = v }
+        o.on("--variants LIST", Array, "variant tables: ja (default), zh-safe, zh, ko; must match the index") { |v| variants = v }
         o.on("-o", "--output PATH", "script file (default: standard output)") { |v| output = v }
       end.parse!(argv)
       raise Error, "too many arguments: #{argv.join(' ')}" unless argv.empty?
