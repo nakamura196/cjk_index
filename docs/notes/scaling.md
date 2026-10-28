@@ -301,7 +301,8 @@ YJIT (`ruby --yjit`):
 
 ## 2026-10-27: tests and what is not checked
 
-Tests (71 runs, 1,560 assertions, all passing): format 4 in one file, format 3 converted from
+Tests (71 runs, 1,560 assertions, all passing locally and in CI on Ruby 3.1,
+3.3, 3.4 and 4.0, Ubuntu, macOS and Windows, run 40647871384): format 4 in one file, format 3 converted from
 it and format 2 give the same results, scores and facet counts in Ruby and
 in Node; a split index with very small shards (more than 20) gives the same
 in Ruby (`Searcher.load`) and in Node (`CJKIndex.load` with a stub fetch,
@@ -335,7 +336,6 @@ Not checked:
 - A real network (latency, HTTP/2 with many small requests) and a real
   site with a split index; Safari, Firefox and phones with format 4.
 - Browser caching of shards across page loads.
-- Ruby 3.1–3.4 locally (CI runs them).
 - Memory of `Searcher` on a split index over a long-running process: it
   keeps every shard and decoded list it has read.
 - Thread safety of the lazy caches in `Searcher` beyond the GVL (two
