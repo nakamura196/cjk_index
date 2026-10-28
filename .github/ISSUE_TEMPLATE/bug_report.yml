@@ -40,6 +40,6 @@ body:
     attributes:
       label: Versions
       description: cjk_index, Ruby, and the browser if relevant.
-      placeholder: cjk_index 1.0.0, Ruby 3.3, Safari 27
+      placeholder: cjk_index 1.1.0, Ruby 3.3, Safari 27
     validations:
       required: true
