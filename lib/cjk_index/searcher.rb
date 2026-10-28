@@ -194,7 +194,7 @@ module CJKIndex
       avg = Array.new(nf, 0.0)
       @lengths.each_with_index { |len, i| avg[i % nf] += len if len }
       @avg_length = avg.map { |s| (v = s / [1, @count].max).zero? ? 1 : v }
-      # A split index lists its Latin tokens in a file, read when needed.
+      # A split index lists its Latin tokens in a file, read only for typos.
       @latin_file = data["latin"] unless @tokens
       @latin_tokens = @latin_file ? nil : @tokens.keys.select { |t| latin?(t) }.sort
       @latin_set = @latin_tokens&.to_set
@@ -271,19 +271,45 @@ module CJKIndex
       map
     end
 
+    # Number of the shard that holds token (split index), or -1.
+    def shard_index(token) = (@shard_first.bsearch_index { |first| first > token } || @shard_first.length) - 1
+
+    def shard(i) = @shards[@shard_file[i]] ||= @load_shard.call(@shard_file[i])
+
+    # The Hash that holds token's posting list if it is in the index, or nil.
+    def table(token)
+      return @tokens unless @shard_first
+
+      i = shard_index(token)
+      i.negative? ? nil : shard(i)
+    end
+
+    def token?(token) = !!table(token)&.key?(token)
+
     # The posting list of a token as [doc, field, n, pos, ...], or nil.
     def postings(token)
-      if @shard_first
-        i = (@shard_first.bsearch_index { |first| first > token } || @shard_first.length) - 1
-        return nil if i.negative?
-
-        list = (@shards[@shard_file[i]] ||= @load_shard.call(@shard_file[i]))[token]
-      else
-        list = @tokens[token]
-      end
+      list = table(token)&.[](token)
       return list unless list && @encoded
 
       @decoded[token] ||= Postings.decode(list, @fields.length)
+    end
+
+    # Index words that start with token, token itself left out.
+    def with_prefix(token)
+      unless @shard_first
+        from = @latin_tokens.bsearch_index { |k| k >= token } || @latin_tokens.length
+        return @latin_tokens[from..].take_while { |k| k.start_with?(token) }.reject { |k| k == token }
+      end
+
+      # In token's shard and the next ones that start with it (tokens are sorted).
+      first = [shard_index(token), 0].max
+      last = first
+      last += 1 while last + 1 < @shard_first.length && @shard_first[last + 1].start_with?(token)
+      (first..last).flat_map { |i| shard(i).keys.select { |k| k != token && k.start_with?(token) } }
+    end
+
+    def latin_tokens
+      @latin_tokens ||= @load_shard.call(@latin_file).sort
     end
 
     # Alternatives for one query token: itself, and for Latin words the index
@@ -291,20 +317,10 @@ module CJKIndex
     def alternatives(token, last)
       return [[token], false] unless latin?(token)
 
-      if @latin_tokens.nil?
-        @latin_tokens = @load_shard.call(@latin_file).sort
-        @latin_set = @latin_tokens.to_set
-      end
-      out = @latin_set.include?(token) ? [token] : []
-      if @prefix && last
-        from = @latin_tokens.bsearch_index { |k| k >= token } || @latin_tokens.length
-        @latin_tokens[from..].each do |k|
-          break unless k.start_with?(token)
-
-          out << k unless k == token
-        end
-      end
-      out.concat(@latin_tokens.select { |k| one_edit?(token, k) }) if @typos && !@latin_set.include?(token) && token.length >= 5
+      has = @shard_first ? token?(token) : @latin_set.include?(token)
+      out = has ? [token] : []
+      out.concat(with_prefix(token)) if @prefix && last
+      out.concat(latin_tokens.select { |k| one_edit?(token, k) }) if @typos && !has && token.length >= 5
       [out, !out.empty? && out.first != token]
     end
 

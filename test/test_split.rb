@@ -85,8 +85,10 @@ class TestSplit < Minitest::Test
       })
       lazy.search("鳥瞰図")
       assert_equal 2, loaded.uniq.length, "鳥瞰 and 瞰図 only"
-      lazy.search("manif")
-      assert_includes loaded, data["latin"]
+      lazy.search("mani")
+      refute_includes loaded, data["latin"], "a prefix is found in the shards"
+      lazy.search("photgraph")
+      assert_includes loaded, data["latin"], "typos need the list of Latin tokens"
     end
   end
 
@@ -173,9 +175,13 @@ class TestSplit < Minitest::Test
           out.fetched = requested.length - before;
           out.after = fresh.search('鳥瞰図').map(r => r.ref);
           try { fresh.search('iiif'); out.latinSync = 'no error'; } catch (e) { out.latinSync = e.message; }
-          const beforeLatin = requested.length;
-          out.latin = (await fresh.searchAsync('manif')).map(r => r.ref);
-          out.latinFetched = requested.length - beforeLatin;
+          let before2 = requested.length;
+          out.prefix = (await fresh.searchAsync('mani')).map(r => r.ref);
+          out.prefixFetched = requested.slice(before2);
+          before2 = requested.length;
+          out.typo = (await fresh.searchAsync('photgraph')).map(r => r.ref);
+          out.typoFetched = requested.slice(before2);
+          out.latinFile = split.latinFile;
           console.log(JSON.stringify(out));
         })().catch(e => { console.error(e); process.exit(1); });
       JS
@@ -184,9 +190,12 @@ class TestSplit < Minitest::Test
       assert_equal %w[agri1 agri4], js["blank"]
       assert_equal 2, js["fetched"]
       assert_equal %w[agri1], js["after"]
-      assert_match(/Latin tokens are not loaded/, js["latinSync"])
-      assert_equal %w[latin1], js["latin"]
-      assert_equal 2, js["latinFetched"], "the Latin tokens, then the shard of manifest"
+      assert_match(/not loaded/, js["latinSync"])
+      assert_equal %w[latin1], js["prefix"]
+      refute_empty js["prefixFetched"]
+      refute js["prefixFetched"].any? { |u| u.end_with?(js["latinFile"]) }, "a prefix is found in the shards"
+      assert_equal %w[latin2], js["typo"]
+      assert js["typoFetched"].any? { |u| u.end_with?(js["latinFile"]) }, "typos need the list of Latin tokens"
       assert_operator js["requested"], :<, js["shards"], "a search fetches only some shards"
     end
   end
