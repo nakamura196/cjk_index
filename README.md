@@ -24,8 +24,8 @@ even when it is an exact title. cjk_index instead:
   stores their positions, so a query matches only where its bigrams are
   adjacent and in order: an exact substring match, with no dictionary or
   native extension (the same idea as [kensaku](https://github.com/whispcat/kensaku));
-- folds variants on both sides: NFKC, lowercase, katakana → hiragana,
-  old-form kanji → modern form (「圖」→「図」), 々 expanded (「佐々木」→「佐佐木」),
+- folds variants on both sides: NFKC, lowercase, variation selectors
+  dropped, katakana → hiragana, old-form kanji → modern form (「圖」→「図」), 々 expanded (「佐々木」→「佐佐木」),
   and optionally Traditional ↔ Simplified Chinese (from OpenCC) and old
   Hangul in the Private Use Area;
 - ranks with BM25 per field, with field boosts;
@@ -386,8 +386,10 @@ cjk_index:
   variants: [ja, _data/itaiji.tsv]
 ```
 
-Each cell is folded first (NFKC, lowercase, katakana → hiragana), and the
-table listed first still picks the form a group folds to. The index records
+Each cell is folded first (NFKC, lowercase, variation selectors dropped,
+katakana → hiragana), so a cell written as an ideographic variation sequence
+(珊 + U+E0100) is the character itself, and the table listed first still
+picks the form a group folds to. The index records
 the entry as written (`_data/itaiji.tsv`), not the full path, and its digest
 covers the file's contents, so editing the file means rebuilding the index.
 To read such an index from another folder in Ruby, pass the normalizer:

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Variation selectors (U+FE00–U+FE0F and the ideographic U+E0100–U+E01EF)
+  are dropped when folding: 「珊」 followed by an ideographic variation
+  selector is 「珊」. Before, the selector broke a CJK run in two, so
+  「珊瑚」 did not find 「珊\u{E0100}瑚」, and a table file of your own with
+  such a cell was rejected as "not one character". `highlight` and
+  `excerpt` keep the selector inside the mark with its character. Rebuild
+  indexes whose text has variation selectors.
+
 ## 1.1.0 (2026-10-28)
 
 - `variants` also takes table files of your own: one group per line,

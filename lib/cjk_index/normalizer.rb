@@ -5,9 +5,10 @@ require "json"
 
 module CJKIndex
   # Folds text so that spelling variants a reader treats as "the same" compare
-  # equal: NFKC (full-width -> half-width etc.), lowercase, katakana ->
-  # hiragana, character variants from the selected tables, and the iteration
-  # mark 々 expanded to the preceding character.
+  # equal: NFKC (full-width -> half-width etc.), lowercase, variation
+  # selectors dropped (珊 followed by an ideographic variation selector is 珊),
+  # katakana -> hiragana, character variants from the selected tables, and
+  # the iteration mark 々 expanded to the preceding character.
   #
   # The same rules run in the browser (see Runtime), so an index built here
   # and a query typed there are folded identically.
@@ -52,6 +53,11 @@ module CJKIndex
     KATAKANA_LAST = 0x30F6
     KANA_OFFSET = 0x60
     ITERATION_MARK = "々"
+    # Variation selectors (VS1-VS16 and the ideographic VS17-VS256) only pick
+    # a glyph of the character before them: 珊 with or without U+E0100 is the
+    # same character to a reader, so they are dropped, not kept as a run of
+    # their own between two CJK characters. In String#delete form.
+    VARIATION_SELECTORS = "\u{FE00}-\u{FE0F}\u{E0100}-\u{E01EF}"
 
     def self.default
       @default ||= new
@@ -121,14 +127,16 @@ module CJKIndex
                            "#{tables.inspect} (an older cjk_index?); rebuild it"
     end
 
-    # Character by character: katakana to hiragana, then the variant tables,
-    # then 々 to the (folded) character before it. Done as passes over the
+    # Character by character: variation selectors dropped, katakana to
+    # hiragana, then the variant tables, then 々 to the (folded) character
+    # before it. Done as passes over the
     # whole string, which gives the same result as one loop over the
     # characters (the loop in runtime.js) and is several times faster in Ruby.
     def normalize(text)
       return "" if text.nil?
 
       s = text.to_s.unicode_normalize(:nfkc).downcase
+      s = s.delete(VARIATION_SELECTORS)
       s = s.tr(KATAKANA, HIRAGANA)
       # 々 repeats the folded character before it, which may be several
       # characters (ko): fold one character at a time, as runtime.js does

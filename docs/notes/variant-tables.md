@@ -224,3 +224,39 @@ in 0.01 s, browser script 11.2 KB (gzip -9 of the generated script; README's
 9.0 KB is measured differently); `ja` + the list 3,467 entries, 0.05 s,
 28.7 KB. So about 6 bytes gzipped per entry. That list folds 燕 to 㷼, not to
 宴, so it does not merge 宴 and 燕 by itself.
+
+## 2026-10-28: variation selectors are dropped
+
+Found while trying 1.1.0 with a librarian-maintained itaiji list of 7,426
+groups (used locally only): one group has a cell written as 珊 + U+E0100 (an
+ideographic variation sequence), and the whole table failed to load with "is
+not one character". The text side had the same gap: a selector is neither CJK
+nor a separator, so it ended the CJK run, and 「珊瑚」 did not find
+「珊\u{E0100}瑚」 (the bigram 珊瑚 was never made).
+
+What: after NFKC and lowercase, VS1–VS16 (U+FE00–U+FE0F) and VS17–VS256
+(U+E0100–U+E01EF) are deleted, in Ruby and in the browser script. NFKC keeps
+them, so this is a step of its own. A selector only picks a glyph of the
+character before it, which is below what a search should tell apart; the
+table cells then fold to the character itself (the 珊 + IVS cell becomes 珊
+and is dropped as equal to the target). 々 after a selector repeats the
+character. `highlight` / `excerpt` give the selector to the character before
+it, so a mark never splits a variation sequence.
+
+Rejected: keeping the selector and only skipping it in the tokenizer (the
+normalized text, filter keys and table cells would still differ by it);
+treating a sequence as its own variant (a site that wants 珊 and 珊 + IVS
+apart is not a search case we know of). Not included: Mongolian free
+variation selectors (U+180B–U+180D, U+180F), as the tokenizer does not treat
+Mongolian as CJK anyway.
+
+Measured: the list above loads with the change (9,703 map entries with ja),
+and fails on main. normalize over 720,000 characters: 0.21–0.22 s on main,
+0.22–0.23 s with the deletion (Ruby 4.0.1, three runs each).
+
+Tests: test_normalizer (selectors dropped, 々 after one, a table cell with
+one), test_runtime (the browser folds and splits the same samples as Ruby;
+highlight keeps the selector inside the mark, same as Ruby). 113 runs pass.
+Indexes built before this keep the selectors in their tokens and should be
+rebuilt when the text has any (the digest does not change: it covers the
+tables, not the folding steps).

@@ -22,6 +22,14 @@ class TestNormalizer < Minitest::Test
     assert_equal "佐佐木", n("佐々木")
   end
 
+  def test_variation_selectors_are_dropped
+    # 珊 with an ideographic variation selector (U+E0100) and 葛 with VS1
+    assert_equal "珊瑚", n("珊\u{E0100}瑚")
+    assert_equal "葛飾", n("葛\u{FE00}飾")
+    assert_equal "佐佐木", n("佐\u{E0101}々木"), "々 repeats the character, not its selector"
+    assert_equal "図", n("圖\u{E0100}"), "the tables still fold the character"
+  end
+
   def test_japanese_table_is_the_default
     assert_equal %w[ja], CJKIndex::Normalizer.default.tables
     assert_equal "图书馆", n("图书馆"), "Simplified Chinese is left alone by default"
@@ -137,6 +145,16 @@ class TestNormalizer < Minitest::Test
       File.write(File.join(dir, "t.tsv"), "# comment\n与\t與\n宴\t醼讌\n")
       error = assert_raises(ArgumentError) { CJKIndex::Normalizer.new(tables: %w[t.tsv], base: dir) }
       assert_match(/t\.tsv:3: "醼讌"/, error.message)
+    end
+  end
+
+  def test_table_file_cells_with_a_variation_selector
+    # an itaiji list may tell glyphs apart with ideographic variation
+    # sequences; once the selector is dropped the cell is the character itself
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "t.tsv"), "珊\t珊\u{E0100}\t姗\n")
+      custom = CJKIndex::Normalizer.new(tables: %w[t.tsv], base: dir)
+      assert_equal "珊珊", custom.normalize("姗珊\u{E0100}")
     end
   end
 

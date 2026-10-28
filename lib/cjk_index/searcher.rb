@@ -353,19 +353,23 @@ module CJKIndex
     chars = text.to_s.chars
     norm = +""
     origin = []
+    ends = []
     chars.each_with_index do |ch, i|
       folded = normalizer.normalize(ch)
       # 々 depends on the previous character, so fold it in context.
       folded = norm[-1] if folded == Normalizer::ITERATION_MARK && !norm.empty?
+      # A character that folds to nothing (a variation selector) belongs to
+      # the one before it: a match on 珊 marks its selector too.
+      ends[-1] = i + 1 if folded.empty? && !ends.empty?
       norm << folded
-      folded.length.times { origin << i }
+      folded.length.times { origin << i; ends << i + 1 }
     end
     needles = normalizer.normalize(query).split(Tokenizer::SEPARATOR).reject(&:empty?)
     ranges = needles.flat_map do |needle|
       found = []
       from = 0
       while (at = norm.index(needle, from))
-        found << [origin[at], origin[at + needle.length - 1] + 1]
+        found << [origin[at], ends[at + needle.length - 1]]
         from = at + needle.length
       end
       found
