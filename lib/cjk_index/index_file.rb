@@ -27,6 +27,10 @@ module CJKIndex
   #
   # Locks use flock, which is reliable on a local disk; do not share the file
   # over NFS.
+  #
+  # The index is always one file (format 4, as Builder#write). A split index
+  # (Builder#write_split) is not supported here: it is meant for static
+  # sites, written once per build.
   class IndexFile
     # Raised by update and write when another writer holds the lock too long.
     class LockTimeout < StandardError; end

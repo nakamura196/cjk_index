@@ -57,9 +57,14 @@ module CJKIndex
 
     attr_reader :tables, :variants, :digest
 
+    KATAKANA = "#{KATAKANA_FIRST.chr(Encoding::UTF_8)}-#{KATAKANA_LAST.chr(Encoding::UTF_8)}"
+    HIRAGANA = "#{(KATAKANA_FIRST - KANA_OFFSET).chr(Encoding::UTF_8)}-#{(KATAKANA_LAST - KANA_OFFSET).chr(Encoding::UTF_8)}"
+
     def initialize(tables: DEFAULT_TABLES)
       @tables = tables.map(&:to_s).uniq.freeze
       @variants = build_variants.freeze
+      keys = @variants.keys.select { |k| k.length == 1 }
+      @variant_chars = keys.empty? ? nil : Regexp.new("[#{keys.map { |k| format('\\u{%x}', k.ord) }.join}]")
       # What the tables fold, not their names: an index built with an older
       # "ja" table must not be read with a newer one.
       @digest = Digest::SHA256.hexdigest(JSON.generate(@variants.sort)).slice(0, 16).freeze
@@ -79,20 +84,32 @@ module CJKIndex
                            "#{tables.inspect} (an older cjk_index?); rebuild it"
     end
 
+    # Character by character: katakana to hiragana, then the variant tables,
+    # then 々 to the (folded) character before it. Done as passes over the
+    # whole string, which gives the same result as one loop over the
+    # characters (the loop in runtime.js) and is several times faster in Ruby.
     def normalize(text)
       return "" if text.nil?
 
+      s = text.to_s.unicode_normalize(:nfkc).downcase
+      s = s.tr(KATAKANA, HIRAGANA)
+      # 々 repeats the folded character before it, which may be several
+      # characters (ko): fold one character at a time, as runtime.js does
+      return iterate(s) if s.include?(ITERATION_MARK)
+
+      @variant_chars ? s.gsub(@variant_chars, @variants) : s
+    end
+
+    private
+
+    def iterate(s)
       prev = nil
-      text.to_s.unicode_normalize(:nfkc).downcase.each_char.map do |ch|
-        code = ch.ord
-        ch = (code - KANA_OFFSET).chr(Encoding::UTF_8) if code.between?(KATAKANA_FIRST, KATAKANA_LAST)
-        ch = @variants.fetch(ch, ch) # may be several characters (ko)
+      s.each_char.map do |ch|
+        ch = @variants.fetch(ch, ch)
         ch = prev if ch == ITERATION_MARK && prev
         prev = ch
       end.join
     end
-
-    private
 
     # Union-find over all pairs; each class folds to the target preferred by
     # the earliest table (lowest code point among equals, for determinism).

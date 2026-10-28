@@ -175,4 +175,22 @@ class TestRuntime < Minitest::Test
     assert_equal "<mark>サクラ</mark>と<mark>桜</mark>", out[1]
     assert_equal "…ああああああ<mark>鳥瞰圖</mark>いいいいいいいいいいい…", out[2]
   end
+
+  def test_words_named_like_object_members
+    b = CJKIndex::Builder.new(fields: %w[title])
+    b.add("a", "title" => "constructors and 東京")
+    queries = %w[constructor tostring __proto__ hasownproperty]
+    js = run_node(<<~JS, [b.to_h, queries])
+      const c = require('./cjk-index.js');
+      const [data, queries] = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+      const idx = new c.Index(data);
+      console.log(JSON.stringify(queries.map(q => idx.search(q).map(r => [r.ref, r.score]))));
+    JS
+    s = CJKIndex::Searcher.new(b)
+    queries.each_with_index do |q, i|
+      ruby = s.search(q).map { |r| [r[:ref], r[:score]] }
+      assert_equal ruby.map(&:first), js[i].map(&:first), q
+      ruby.zip(js[i]) { |r, n| assert_in_delta r[1], n[1], 1e-9, q }
+    end
+  end
 end

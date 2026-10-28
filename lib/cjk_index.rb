@@ -3,6 +3,7 @@
 require_relative "cjk_index/version"
 require_relative "cjk_index/normalizer"
 require_relative "cjk_index/tokenizer"
+require_relative "cjk_index/postings"
 require_relative "cjk_index/builder"
 require_relative "cjk_index/runtime"
 require_relative "cjk_index/searcher"
