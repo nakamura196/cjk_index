@@ -40,6 +40,16 @@ Measured 2026-10-07 on an Apple M4 Max (macOS 27.0.1), Google Chrome
 154.0.8037.98 (headless) and Safari 27.0.1, 5 runs per size. All 600 result
 lists (2 browsers × 3 sizes × 5 runs × 20 queries) matched the Ruby Searcher.
 
+Format 4 (2026-10-28): `results/chrome-v3.json` and `results/chrome-v4.json`
+are the same measurement in Google Chrome 156.0.8078.73 (headless, 5 runs
+per size), with indexes built by the commit before format 4 (af5064f) and
+by format 4. Run with `node bench/browser/serve.mjs chrome-v4 5 1000 5000
+16951` and Chrome opened on the page as in run.zsh. At 16,951 records:
+load 275 → 142 ms (download 133 → 81, parse 116 → 38), JS heap 344 → 136
+MB, query median / max 0.04 / 0.82 → 0.04 / 0.83 ms; every result list
+matched the Ruby Searcher. summarize.py covers chrome.json and safari.json
+only.
+
 ## Limits
 
 - The download is from a local server, so it shows the browser's cost of
