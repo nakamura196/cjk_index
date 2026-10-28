@@ -11,7 +11,7 @@ module CJKIndex
   #   Bridgetown.configure do |config|
   #     init :cjk_index,
   #          output: "cjk-index",               # folder inside the output (default)
-  #          variants: ["ja"],                  # variant tables: ja (default), zh
+  #          variants: ["ja"],                  # variant tables: ja (default), zh-safe, zh, ko, or a file
   #          indexes: [
   #            { name: "posts",                 # -> output/cjk-index/posts.json
   #              collection: "posts",           # a collection (or a list of them), or...
@@ -37,7 +37,7 @@ module CJKIndex
     def write(site, config)
       config = stringify(config)
       output = config.fetch("output", DEFAULT_OUTPUT).to_s.gsub(%r{\A/+|/+\z}, "")
-      normalizer = Normalizer.new(tables: Array(config.fetch("variants", Normalizer::DEFAULT_TABLES)))
+      normalizer = Normalizer.new(tables: Array(config.fetch("variants", Normalizer::DEFAULT_TABLES)), base: site.root_dir)
       put(site, output, RUNTIME_NAME, Runtime.source(normalizer: normalizer))
       Array(config["indexes"]).each do |spec|
         builder = build(site, stringify(spec), normalizer)

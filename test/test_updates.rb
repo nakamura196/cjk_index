@@ -69,6 +69,17 @@ class TestUpdates < Minitest::Test
     assert_equal rebuild(docs).to_h, loaded.to_h
   end
 
+  def test_load_with_a_table_file_of_your_own
+    fixtures = File.expand_path("fixtures/variants", __dir__)
+    normalizer = CJKIndex::Normalizer.new(tables: %w[itaiji.tsv], base: fixtures)
+    b = CJKIndex::Builder.new(fields: %w[title], normalizer: normalizer)
+    b.add("a", "title" => "醼席")
+    # The index records "itaiji.tsv" as written; from another folder, pass the normalizer
+    assert_raises(ArgumentError) { CJKIndex::Builder.load(b.to_json) }
+    loaded = CJKIndex::Builder.load(b.to_json, normalizer: normalizer)
+    assert_equal ["a"], CJKIndex::Searcher.new(loaded).search("讌席").map { |r| r[:ref] }
+  end
+
   def test_searcher_sees_changes
     b = new_builder
     b.add("a", "title" => "國牛十圖", "type" => "地図")

@@ -9,7 +9,7 @@ module CJKIndex
   #
   #   cjk_index:
   #     output: assets/cjk-index          # where files are written (default)
-  #     variants: [ja]                    # variant tables: ja (default), zh (Traditional -> Simplified)
+  #     variants: [ja]                    # variant tables: ja (default), zh-safe, zh, ko, or a file of your own
   #     indexes:
   #       - name: posts                   # -> assets/cjk-index/posts.json
   #         collection: posts             # a Jekyll collection, or...
@@ -64,7 +64,7 @@ module CJKIndex
         return unless config.is_a?(Hash)
 
         output = config.fetch("output", DEFAULT_OUTPUT).sub(%r{\A/+}, "").sub(%r{/+\z}, "")
-        normalizer = Normalizer.new(tables: Array(config.fetch("variants", Normalizer::DEFAULT_TABLES)))
+        normalizer = Normalizer.new(tables: Array(config.fetch("variants", Normalizer::DEFAULT_TABLES)), base: site.source)
         site.static_files << GeneratedFile.new(site, output, RUNTIME_NAME, Runtime.source(normalizer: normalizer))
         Array(config["indexes"]).each do |spec|
           builder = build(site, spec, normalizer)

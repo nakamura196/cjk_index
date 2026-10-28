@@ -366,6 +366,35 @@ by Unicode normalization. `ko` is for old Hangul stored in the Private Use
 Area by HWP and the Hanyang fonts; a query typed in standard jamo then finds
 and highlights it.
 
+### A table of your own
+
+Any entry of `variants` that is not one of the names above is a table file
+of your own, relative to the site's folder (Jekyll, Bridgetown) or the
+current folder (CLI, Rake, Ruby). One group per line, tab-separated: the
+form to fold to, then its variants, one character each. This is the format
+of the itaiji lists that collection databases often keep already.
+
+```text
+# itaiji.tsv
+与	與
+宴	醼	讌
+嶋	嶌
+```
+
+```yaml
+cjk_index:
+  variants: [ja, _data/itaiji.tsv]
+```
+
+Each cell is folded first (NFKC, lowercase, katakana → hiragana), and the
+table listed first still picks the form a group folds to. The index records
+the entry as written (`_data/itaiji.tsv`), not the full path, and its digest
+covers the file's contents, so editing the file means rebuilding the index.
+To read such an index from another folder in Ruby, pass the normalizer:
+`Builder.load(json, normalizer: CJKIndex::Normalizer.new(tables: [...], base: dir))`.
+Wide lists merge more than spelling: a list that puts 燕 with 宴 makes
+a search for 燕 (swallow) find 宴 (banquet). Check a list against your own material first.
+
 Browser script size, gzipped: no table 6.3 KB, `ja` 9.0 KB, `ja, zh-safe`
 24.1 KB, `ja, zh` 25.9 KB, `ja, ko` 36.1 KB.
 

@@ -129,7 +129,9 @@ module CJKIndex
     # Reads an index written by to_json (String) or to_h back, to update it.
     # Reads formats 2, 3 and 4; a split index is read with read.
     # A value filter keeps the form of each value that the index stored.
-    def self.load(index)
+    # normalizer: needed when the index uses a table file of your own and
+    # the current folder is not the one it was built from.
+    def self.load(index, normalizer: nil)
       data = index.is_a?(String) ? JSON.parse(index) : index
       unless data.is_a?(Hash) && FORMATS.include?(data["format"])
         raise ArgumentError, "cjk_index: unsupported index format #{data.is_a?(Hash) ? data['format'].inspect : data.class}"
@@ -137,7 +139,7 @@ module CJKIndex
       raise ArgumentError, "cjk_index: a split index is read with Builder.read(directory)" unless data["tokens"]
 
       filters = (data["filters"] || {}).transform_values { |f| f.slice("kind", "separator") }
-      normalizer = Normalizer.new(tables: data["variants"])
+      normalizer ||= Normalizer.new(tables: data["variants"])
       normalizer.check!(data)
       builder = new(fields: data["fields"], boosts: data["fields"].zip(data["boosts"]).to_h,
                     normalizer: normalizer, filters: filters)
@@ -147,8 +149,8 @@ module CJKIndex
 
     # Reads an index from a file (written by write or to_json) or from the
     # directory of a split index (written by write_split), to update it.
-    def self.read(path)
-      load(Builder.read_data(path))
+    def self.read(path, normalizer: nil)
+      load(Builder.read_data(path), normalizer: normalizer)
     end
 
     # The index at path as one Hash with "tokens", for a file or a split

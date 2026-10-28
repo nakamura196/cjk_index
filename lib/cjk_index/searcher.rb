@@ -57,7 +57,7 @@ module CJKIndex
         end
       end
 
-      @normalizer = normalizer || Normalizer.new(tables: data["variants"])
+      @normalizer = normalizer || @builder&.normalizer || Normalizer.new(tables: data["variants"])
       @normalizer.check!(data)
 
       if data["shards"] && !@load_shard
