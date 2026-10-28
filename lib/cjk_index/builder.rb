@@ -111,6 +111,7 @@ module CJKIndex
     # The first four-digit number in a value (after folding full-width digits).
     def self.year(value, normalizer)
       return value.to_i if value.is_a?(Numeric)
+      return value.year if value.respond_to?(:year) # Time, Date (YAML front matter)
 
       normalizer.normalize(value.to_s)[/(?<!\d)\d{4}(?!\d)/]&.to_i
     end
@@ -235,15 +236,17 @@ module CJKIndex
 
     # Value filter: [[key, value as written], ...]; year filter: Integer or nil.
     def filter_value(spec, raw)
+      # Array() would split a Time into its parts
+      raw = raw.is_a?(Array) ? raw : [raw].compact
       if spec["kind"] == "year"
-        Array(raw).each do |v|
+        raw.each do |v|
           year = Builder.year(v, @normalizer)
           return year if year
         end
         return nil
       end
 
-      Array(raw).flat_map { |v| spec["separator"] ? v.to_s.split(spec["separator"]) : [v.to_s] }
+      raw.flat_map { |v| spec["separator"] ? v.to_s.split(spec["separator"]) : [v.to_s] }
                 .map { |v| v.gsub(WHITESPACE, " ").strip }.reject(&:empty?)
                 .map { |v| [Builder.filter_key(v, @normalizer), v] }.uniq(&:first)
     end

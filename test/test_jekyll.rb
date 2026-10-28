@@ -48,6 +48,16 @@ class TestJekyll < Minitest::Test
     end
   end
 
+  # filter fields need not be index fields; Jekyll gives a post's date as a Time
+  def test_collection_filters
+    spec = { "name" => "posts", "collection" => "posts", "fields" => %w[title], "filters" => { "kind" => "value", "date" => "year" } }
+    build("cjk_index" => { "indexes" => [spec] }) do |dest|
+      index = JSON.parse(File.read(File.join(dest, "assets/cjk-index/posts.json")))
+      assert_equal({ "kind" => "value", "values" => %w[写真], "docs" => [[0]] }, index["filters"]["kind"])
+      assert_equal [2023], index["filters"]["date"]["docs"]
+    end
+  end
+
   def test_filters_option
     spec = { "name" => "items", "data" => "demo-metadata", "ref" => "objectid", "fields" => %w[title],
              "filters" => { "type" => { "kind" => "value", "separator" => ";" } } }

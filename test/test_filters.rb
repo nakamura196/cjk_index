@@ -34,6 +34,16 @@ class TestFilters < Minitest::Test
     assert_equal({ "kind" => "year", "docs" => [1900, 1931, 1923, nil, nil] }, f["date"])
   end
 
+  def test_year_of_time_and_date
+    require "date"
+    b = CJKIndex::Builder.new(fields: %w[title], filters: { "date" => "year", "tag" => "value" })
+    b.add("a", "title" => "x", "date" => Time.utc(1905, 3, 1), "tag" => Time.utc(1905, 3, 1))
+    b.add("b", "title" => "y", "date" => Date.new(1912, 7, 30))
+    f = b.to_h["filters"]
+    assert_equal [1905, 1912], f["date"]["docs"]
+    assert_equal [[0], []], f["tag"]["docs"]
+  end
+
   def test_filters_restrict_search
     s = CJKIndex::Searcher.new(builder)
     assert_equal %w[map1 map2 none photo1], refs(s.search("農学部")).sort
