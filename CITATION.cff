@@ -7,7 +7,7 @@ authors:
     given-names: Satoru
     affiliation: The University of Tokyo
     orcid: "https://orcid.org/0000-0001-8245-7925"
-version: 0.2.0
+version: 1.0.0
 date-released: 2026-10-28
 license: MIT
 repository-code: "https://github.com/nakamura196/cjk_index"

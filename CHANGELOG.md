@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 (unreleased)
+## 1.0.0 (2026-10-28)
 
 Indexes built with 0.x should be rebuilt: the `ja` table changed, and the
 index now records a digest of its tables (see below). Formats 2 and 3 are
