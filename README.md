@@ -39,7 +39,7 @@ even when it is an exact title. cjk_index instead:
 - splits a large index into a small manifest and shards that the browser
   fetches only when a query needs them.
 
-The browser script is about 9 KB gzipped with the Japanese table, 24 KB
+The browser script is about 11 KB gzipped with the Japanese table, 28 KB
 with the Chinese table as well. Index it from Ruby, Jekyll, Bridgetown, a
 Rake task or the command line.
 
@@ -397,8 +397,8 @@ To read such an index from another folder in Ruby, pass the normalizer:
 Wide lists merge more than spelling: a list that puts 燕 with 宴 makes
 a search for 燕 (swallow) find 宴 (banquet). Check a list against your own material first.
 
-Browser script size, gzipped: no table 6.3 KB, `ja` 9.0 KB, `ja, zh-safe`
-24.1 KB, `ja, zh` 25.9 KB, `ja, ko` 36.1 KB.
+Browser script size, gzipped (level 9, 1.1.1; KB = 1,024 bytes): no table
+8.8 KB, `ja` 11.4 KB, `ja, zh-safe` 26.2 KB, `ja, zh` 27.8 KB, `ja, ko` 38.0 KB.
 
 The tables are UTF-8 TSV files in `data/` ("variant<TAB>folded", an optional
 comment column, `#` comments); `script/variant_tables.rb` generates them from

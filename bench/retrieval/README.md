@@ -2,7 +2,9 @@
 
 How often the right records come back, and how often wrong ones do, for
 Japanese queries on two real collections. Measured 2026-10-07 on an Apple M4
-Max, Ruby 4.0.1, Node 25.6.0.
+Max, Ruby 4.0.1, Node 25.6.0; cjk_index re-measured on 1.1.1 on 2026-10-28
+(same machine; the lunr runs gave the same output, see
+`../RESULTS-1.1.1.md`).
 
 ## What was compared
 
@@ -47,9 +49,8 @@ The relevant records were fixed before any engine ran (commit 6153888):
    spellings listed by hand in `queries.tsv` (no cjk_index code involved).
 2. Each (query, record) pair was judged against the rules in `judging.md`,
    from the contexts in `pools/`, without seeing any engine's output. The
-   judging was done by Claude (an LLM; two instances, one per half of the
-   pool) and spot-checked by a second reading of 24 random trap pairs.
-   1,540 pairs, 1,192 relevant. No judgment was changed after the runs.
+   judging was done by an LLM (Anthropic's Claude Opus 5.5; two instances,
+   one per half of the pool). 1,540 pairs, 1,192 relevant. No judgment was changed after the runs.
 
 A returned record outside the pool counts as a false positive. This
 happened once: cjk_index returned aozora 043433 for カキ, through 「聊さかキザ」
@@ -58,7 +59,8 @@ happened once: cjk_index returned aozora 043433 for カキ, through 「聊さか
 ## Results
 
 Set-based precision (P) and recall (R), summed over the queries
-(`results/summary.md` has every query).
+(`results/summary.md` has every query). cjk_index 1.1.1; its only change
+from 0.1.x is a06 証明 (below).
 
 | collection | queries | engine | TP | FP | FN | P | R |
 |---|---|---|---:|---:|---:|---:|---:|
@@ -66,11 +68,11 @@ Set-based precision (P) and recall (R), summed over the queries
 | | | lunr-default | 0 | 0 | 77 | – | 0.000 |
 | | | lunr-ja-or | 48 | 48 | 29 | 0.500 | 0.623 |
 | | | lunr-ja-and | 39 | 0 | 38 | 1.000 | 0.506 |
-| aozora | all 15 | cjk_index | 1,103 | 345 | 12 | 0.762 | 0.989 |
+| aozora | all 15 | cjk_index | 1,106 | 345 | 9 | 0.762 | 0.992 |
 | | | lunr-default | 0 | 0 | 1,115 | – | 0.000 |
 | | | lunr-ja-or | 777 | 7,748 | 338 | 0.091 | 0.697 |
 | | | lunr-ja-and | 774 | 10 | 341 | 0.987 | 0.694 |
-| aozora | without traps (11) | cjk_index | 792 | 26 | 12 | 0.968 | 0.985 |
+| aozora | without traps (11) | cjk_index | 795 | 26 | 9 | 0.968 | 0.989 |
 | | | lunr-ja-and | 596 | 7 | 208 | 0.988 | 0.741 |
 | aozora | exact (2) | cjk_index | 239 | 0 | 0 | 1.000 | 1.000 |
 | | | lunr-ja-and | 133 | 3 | 106 | 0.978 | 0.556 |
@@ -81,17 +83,23 @@ What this shows:
   Chinese or Korean query: its trimmer removes every character that is not
   `\w`.
 - **Segmentation misses exact matches.** With lunr-ja, 停車場 finds 11 of 116
-  records. TinySegmenter splits 停車場 inside sentences (停車 / 場 in 71 of
-  the 116 records) but keeps it whole as a query, so the terms differ.
+  records. TinySegmenter keeps 停車場 whole as a query, but inside sentences
+  it does not: 105 of the 116 records have no 停車場 token (88 of them have
+  停車 / 場), so the terms differ. (Counted by running `lunr.ja.tokenizer`
+  over the 116 relevant records.)
   夏目漱石 and 帝国大学 are split as queries and lose records the same way.
   cjk_index found every exact match.
 - **Folding works where the table has the variant**: recall 1.0 for
   鉄道 / 鐵道, 戦争 / 戰爭, 帝国大学 / 帝國大學, 弁当 / 辨當, 实录 / 実録, 农学部 /
-  農學部, ぐんぼう / グンボウ, 佐佐木 / 佐々木. lunr-ja finds none of the
-  variant-only records.
-- **Variants missing from the table are missed.** 證 and 颱 are not in the
-  `ja` table, so 証明 missed 3 of 24 (證明) and 台風 missed 9 of 15 (颱風).
-  These are the 12 false negatives of cjk_index.
+  農學部, ぐんぼう / グンボウ, 佐佐木 / 佐々木, and (since the 1.0 `ja` table)
+  証明 / 證明. lunr-ja folds no variant. Where it returns a record written
+  only in the variant form, the words matched separately: for 群芳図譜 it
+  returns records titled 群芳圖譜 through 群芳 in the title and 図譜 in the
+  description.
+- **Variants missing from the table are missed.** 颱 is not in the `ja`
+  table, so 台風 missed 9 of 15 (颱風). These are the 9 false negatives of
+  cjk_index. With the 0.1 table (291 pairs), 證 was missing too, and 証明
+  missed 3 of 24 (證明).
 - **Substring matching costs precision on short kana and merged forms.**
   カメ returned 55 records for 4 relevant (確かめ, いかめしい, カメラ); カキ 169
   for 12 (書き, 掻き); ネコ 49 for 29 (ねころぶ, ねんねこ); 辯 216 for 115 (弁当,

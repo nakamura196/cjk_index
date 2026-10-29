@@ -20,7 +20,7 @@ lunr for comparison: [compare.html](https://nakamura196.github.io/cb-ja-demo/com
 | | lunr.js | cjk_index |
 |---|---|---|
 | Where the index is built | in the browser, on every page load (or prebuilt with Node) | in Ruby, at build time |
-| What the browser downloads | the records (a JS or JSON store) and lunr.js (about 8.4 KB gzipped) | the index JSON and `cjk-index.js` (about 9 KB gzipped with the Japanese table) |
+| What the browser downloads | the records (a JS or JSON store) and lunr.js (about 8.4 KB gzipped) | the index JSON and `cjk-index.js` (about 11 KB gzipped with the Japanese table) |
 | CJK text | trimmed to nothing with the default pipeline | overlapping bigrams with positions: a query matches where it occurs as a substring |
 | Variants | none (stemming for English) | NFKC, case, katakana/hiragana, old/new kanji forms, optionally Traditional/Simplified Chinese |
 | Ranking | BM25 | BM25 per field, with field boosts |
