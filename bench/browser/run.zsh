@@ -3,12 +3,14 @@
 #
 # Prerequisite: bench/browser/build.rb has written bench/browser/cache/.
 # Usage (from the repository root):
-#   zsh bench/browser/run.zsh [runs]          # default 5 runs per size
-# Writes bench/browser/results/chrome.json and safari.json.
+#   zsh bench/browser/run.zsh [runs] [browsers]   # default 5 runs per size, "chrome safari"
+# Writes bench/browser/results/<browser>.json (one index file) and
+# <browser>-split.json (the split index) for each browser.
 # Safari opens a window on the desktop; close it when the run is done.
 set -euo pipefail
 
 RUNS=${1:-5}
+BROWSERS=(${=${2:-chrome safari}})
 SIZES=(1000 5000 16951)
 HERE=${0:A:h}
 URL=http://127.0.0.1:8765/page.html
@@ -21,20 +23,29 @@ wait_for() {  # wait until the server process exits (at most 30 minutes)
   wait $pid
 }
 
-# Chrome: a fresh profile, so nothing is cached between runs of this script.
-node $HERE/serve.mjs chrome $RUNS $SIZES & SERVER=$!
-sleep 1
-PROFILE=$(mktemp -d)
-"$CHROME" --headless=new --user-data-dir=$PROFILE --no-first-run --enable-precise-memory-info "$URL?browser=chrome" >/dev/null 2>&1 & BROWSER=$!
-wait_for $SERVER
-kill $BROWSER 2>/dev/null || true
-rm -rf $PROFILE
+chrome() {  # $1: label, then serve.mjs options. A fresh profile, so nothing is cached between runs.
+  local label=$1; shift
+  node $HERE/serve.mjs $label $RUNS $SIZES "$@" & SERVER=$!
+  sleep 1
+  PROFILE=$(mktemp -d)
+  "$CHROME" --headless=new --user-data-dir=$PROFILE --no-first-run --enable-precise-memory-info "$URL?browser=$label" >/dev/null 2>&1 & BROWSER=$!
+  wait_for $SERVER
+  kill $BROWSER 2>/dev/null || true
+  rm -rf $PROFILE
+}
 
-# Safari: opens a normal window (Safari has no headless mode).
-node $HERE/serve.mjs safari $RUNS $SIZES & SERVER=$!
-sleep 1
-open -a Safari "$URL?browser=safari"
-wait_for $SERVER
+safari() {  # opens a normal window (Safari has no headless mode)
+  local label=$1; shift
+  node $HERE/serve.mjs $label $RUNS $SIZES "$@" & SERVER=$!
+  sleep 1
+  open -a Safari "$URL?browser=$label"
+  wait_for $SERVER
+}
+
+for b in $BROWSERS; do
+  $b $b
+  $b $b-split --split
+done
 
 "$CHROME" --version
 defaults read /Applications/Safari.app/Contents/Info CFBundleShortVersionString

@@ -32,7 +32,7 @@ benchmarked the other tools.
 
 | Tool | Build needs / browser runtime | CJK handling | Matches inside a word | Variant folding | Ranking | Status (2026-09-28) |
 |---|---|---|---|---|---|---|
-| **cjk_index** 0.1 | Ruby only / JS, 6.5 KB gzipped (24 KB with the `zh` table) | Positional bigrams; single characters for 1-char queries | Yes, exact substring | NFKC, case, katakana → hiragana, 291 old kanji forms, 々, optional Traditional → Simplified (OpenCC) | BM25 per field, field boosts | Published 2026-09-28 |
+| **cjk_index** 1.1 | Ruby only / JS, 11 KB gzipped (28 KB with the `zh` table) | Positional bigrams; single characters for 1-char queries | Yes, exact substring | NFKC, case, katakana → hiragana, 409 variant pairs (`ja`), 々, optional Traditional → Simplified (OpenCC), tables of your own | BM25 per field, field boosts | 1.1.1 released 2026-10-28 (this row updated then; the others are as of 2026-09-28) |
 | [kensaku](https://github.com/whispcat/kensaku) | Rust CLI / WASM 147 KB + JS 5 KB gzipped | Positional bigrams | Yes, exact substring (tested exhaustively) | Not documented | BM25, title ×3 | Published 2026-09-25, 0 stars |
 | [Pagefind](https://github.com/Pagefind/pagefind) | Rust binary (via npx) / WASM | Word segmentation at indexing; at query time with `Intl.Segmenter` since v1.5.0 | Only where query and text segment the same way (see note 1) | None | BM25-style, title boost | 5,485 stars, active |
 | [FlexSearch](https://github.com/nextapps-de/flexsearch) | JS | `Charset.CJK`: one token per character | Yes | None | Own scoring | 13.8k stars, active |

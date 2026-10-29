@@ -1,13 +1,16 @@
 // Local server for the browser measurement. No dependencies.
 //
 // Usage (from the repository root, after build.rb):
-//   node bench/browser/serve.mjs <label> <runs> <n> [<n> ...]
+//   node bench/browser/serve.mjs <label> <runs> <n> [<n> ...] [--split]
 // then open http://127.0.0.1:8765/page.html?browser=<label> in the browser
 // (run.zsh does this for Chrome and Safari).
 //
 // The plan is every n, <runs> times each. The index is served from the
 // pre-compressed index-<n>.json.gz with Content-Encoding: gzip, so the
 // browser downloads the gzip size and decodes it as a real site would.
+// With --split the page loads the split index (split-<n>/) instead; its
+// files are served the same way, from split-<n>-gz/. Each index response
+// carries X-Gzip-Bytes, the size sent, so the page can count what it fetched.
 // Results go to results/<label>.json; the server exits when the plan is done.
 
 import http from 'node:http';
@@ -16,12 +19,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const [label, runs, ...ns] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const split = args.includes('--split');
+const [label, runs, ...ns] = args.filter((a) => a !== '--split');
 if (!label || !runs || ns.length === 0) {
   console.error('usage: serve.mjs <label> <runs> <n> [<n> ...]');
   process.exit(2);
 }
-const plan = ns.flatMap((n) => Array.from({ length: Number(runs) }, (_, i) => ({ n: Number(n), run: i + 1 })));
+const plan = ns.flatMap((n) => Array.from({ length: Number(runs) }, (_, i) => ({ n: Number(n), run: i + 1, split })));
 let next = 0;
 const results = [];
 const PORT = 8765;
@@ -59,8 +64,15 @@ http.createServer((req, res) => {
   }
   const m = url.pathname.match(/^\/index-(\d+)\.json$/);
   if (m) {
-    const file = path.join(HERE, 'cache', `index-${m[1]}.json.gz`);
-    return send(res, 200, fs.readFileSync(file), { 'Content-Type': types['.json'], 'Content-Encoding': 'gzip' });
+    const body = fs.readFileSync(path.join(HERE, 'cache', `index-${m[1]}.json.gz`));
+    return send(res, 200, body, { 'Content-Type': types['.json'], 'Content-Encoding': 'gzip', 'X-Gzip-Bytes': body.length });
+  }
+  const s = url.pathname.match(/^\/split-(\d+)\/(index|[0-9a-f]{16}|latin-[0-9a-f]{16})\.json$/);
+  if (s) {
+    const file = path.join(HERE, 'cache', `split-${s[1]}-gz`, `${s[2]}.json`);
+    if (!fs.existsSync(file)) return send(res, 404, 'not found');
+    const body = fs.readFileSync(file);
+    return send(res, 200, body, { 'Content-Type': types['.json'], 'Content-Encoding': 'gzip', 'X-Gzip-Bytes': body.length });
   }
   const file = path.join(HERE, path.normalize(url.pathname).replace(/^(\.\.[/\\])+/, ''));
   if (!file.startsWith(HERE) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return send(res, 404, 'not found');

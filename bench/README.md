@@ -11,8 +11,9 @@ The data is [globis-university/aozorabunko-clean](https://huggingface.co/dataset
   the records of a collection site
 - **fulltext**: title, author and the whole text
 
-Measured 2026-10-01 on an Apple M4 Max with Ruby 4.0.1 and Node 25.6.
-Query times are the median and the slowest of 20 queries (each the median of
+Measured 2026-10-01 on an Apple M4 Max with Ruby 4.0.1 and Node 25.6, with
+0.1.x. The same table re-measured on 1.1.1, side by side
+with this one, is in [RESULTS-1.1.1.md](RESULTS-1.1.1.md). Query times are the median and the slowest of 20 queries (each the median of
 5 runs). Ruby and Node returned the same number of hits for every query.
 
 | mode | works | characters | build | index | gzipped | Ruby memory | Ruby load | Ruby query (median / max) | Node load | Node query (median / max) |
