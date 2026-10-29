@@ -12,6 +12,8 @@
 # Writes to bench/browser/cache/ (not committed):
 #   index-<n>.json, index-<n>.json.gz  the index, and its gzip (level 9)
 #   expected-<n>.json                  refs returned by the Ruby Searcher per query
+#   split-<n>/                         the same index split (Builder#write_split)
+#   split-<n>-gz/                      the files of split-<n>/, gzip (level 9)
 #   cjk-index.js                       the browser runtime
 # The page checks every browser result against expected-<n>.json.
 
@@ -48,9 +50,16 @@ counts.each do |n|
   json = builder.to_json
   File.write(File.join(CACHE, "index-#{n}.json"), json)
   File.binwrite(File.join(CACHE, "index-#{n}.json.gz"), Zlib.gzip(json, level: 9))
+  split = File.join(CACHE, "split-#{n}")
+  FileUtils.rm_rf([split, "#{split}-gz"])
+  builder.write_split(split)
+  FileUtils.mkdir_p("#{split}-gz")
+  Dir.children(split).each do |name|
+    File.binwrite(File.join("#{split}-gz", name), Zlib.gzip(File.read(File.join(split, name)), level: 9))
+  end
   searcher = CJKIndex::Searcher.new(json)
   expected = QUERIES.to_h { |q| [q, searcher.search(q).map { |r| r[:ref] }] }
   File.write(File.join(CACHE, "expected-#{n}.json"), JSON.generate(expected))
   gz = File.size(File.join(CACHE, "index-#{n}.json.gz"))
-  puts format("%d records: %.1f MB, gzip %.1f MB", n, json.bytesize / 1e6, gz / 1e6)
+  puts format("%d records: %.1f MB, gzip %.1f MB; split: %d files", n, json.bytesize / 1e6, gz / 1e6, Dir.children(split).size)
 end

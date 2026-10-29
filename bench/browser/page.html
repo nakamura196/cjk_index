@@ -27,23 +27,14 @@ const TRIALS = 5;
   const queries = await (await fetch('/queries.json', { cache: 'no-store' })).json();
   const expected = await (await fetch(`/cache/expected-${n}.json`, { cache: 'no-store' })).json();
 
-  // Load: download (gzip on the wire, decoded by the browser), parse, build the Index.
-  let t = performance.now();
-  const res = await fetch(`/index-${n}.json`, { cache: 'no-store' });
-  const text = await res.text();
-  const tFetch = performance.now() - t;
-  t = performance.now();
-  const data = JSON.parse(text);
-  const tParse = performance.now() - t;
-  t = performance.now();
-  const idx = new CJKIndex.Index(data);
-  const tInit = performance.now() - t;
-
+  const gz = (res) => Number(res.headers.get('X-Gzip-Bytes')) || 0;
   const times = {}, hits = {}, mismatch = [];
-  for (const q of queries) {
-    const first = idx.search(q).map((r) => r.ref);
-    hits[q] = first.length;
-    if (JSON.stringify(first) !== JSON.stringify(expected[q])) mismatch.push(q);
+  const check = (q, results) => {
+    const refs = results.map((r) => r.ref);
+    hits[q] = refs.length;
+    if (JSON.stringify(refs) !== JSON.stringify(expected[q])) mismatch.push(q);
+  };
+  const warm = (idx, q) => {
     const trials = [];
     for (let i = 0; i < TRIALS; i++) {
       const t0 = performance.now();
@@ -51,13 +42,54 @@ const TRIALS = 5;
       trials.push((performance.now() - t0) / REPS);
     }
     times[q] = median(trials);
+  };
+
+  // Load: download (gzip on the wire, decoded by the browser), parse, build
+  // the Index. For a split index this is the manifest only.
+  const url = step.split ? `/split-${n}/index.json` : `/index-${n}.json`;
+  let t = performance.now();
+  const res = await fetch(url, { cache: 'no-store' });
+  const text = await res.text();
+  const tFetch = performance.now() - t;
+  const loadBytes = gz(res);
+  t = performance.now();
+  const data = JSON.parse(text);
+  const tParse = performance.now() - t;
+  let fetched = 0, requests = 0;
+  const loadShard = (file) => fetch(`/split-${n}/${file}`, { cache: 'no-store' }).then((r) => {
+    fetched += gz(r); requests += 1;
+    return r.json();
+  });
+  t = performance.now();
+  const idx = new CJKIndex.Index(data, step.split ? { loadShard } : undefined);
+  const tInit = performance.now() - t;
+
+  // Split index: each query starts from a fresh Index on the manifest, so
+  // its first search fetches every shard it needs, as the first search on a
+  // page does (cold). The repeated searches after it are timed as for one file.
+  const cold = {}, coldBytes = {}, coldRequests = {};
+  for (const q of queries) {
+    if (step.split) {
+      const fresh = new CJKIndex.Index(data, { loadShard });
+      fetched = 0; requests = 0;
+      const t0 = performance.now();
+      const results = await fresh.searchAsync(q);
+      cold[q] = performance.now() - t0;
+      coldBytes[q] = fetched; coldRequests[q] = requests;
+      check(q, results);
+      warm(fresh, q);
+    } else {
+      check(q, idx.search(q));
+      warm(idx, q);
+    }
   }
 
   const memory = performance.memory ? performance.memory.usedJSHeapSize : null;
   const result = {
-    browser, userAgent: navigator.userAgent, n, run,
+    browser, userAgent: navigator.userAgent, n, run, split: !!step.split, load_bytes: loadBytes,
     fetch_ms: tFetch, parse_ms: tParse, init_ms: tInit, load_ms: tFetch + tParse + tInit,
     used_js_heap_bytes: memory, times, hits, mismatch,
+    ...(step.split ? { cold_ms: cold, cold_bytes: coldBytes, cold_requests: coldRequests } : {}),
   };
   await fetch(`/result?browser=${encodeURIComponent(browser)}`, { method: 'POST', body: JSON.stringify(result) });
   location.reload();
