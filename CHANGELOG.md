@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.2 (2026-11-14)
+
+- Jekyll: on a CollectionBuilder site (one with `_data/config-search.csv`),
+  the `search` index with `preset: collectionbuilder` and `variants: [ja]` is
+  built by default when `_config.yml` has no `cjk_index` section (or when
+  `cjk_index` sets only options such as `variants`). Set `cjk_index: false`
+  (or `enabled: false`) to turn it off.
+
 ## 1.1.1 (2026-10-28)
 
 - Variation selectors (U+FE00–U+FE0F and the ideographic U+E0100–U+E01EF)

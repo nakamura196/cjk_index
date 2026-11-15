@@ -226,11 +226,14 @@ lunr.js からの移行の手順: [migrating-from-lunr.md](migrating-from-lunr.m
 
 ### CollectionBuilder
 
+CollectionBuilder のサイト（`_data/config-search.csv` があるサイト）では、
+`Gemfile` に gem を足すだけで、`preset: collectionbuilder`・`variants: [ja]` の
+`assets/cjk-index/search.json` が既定で作られる。`variants` などを変えるときだけ
+`_config.yml` に書く:
+
 ```yaml
 cjk_index:
-  indexes:
-    - name: search
-      preset: collectionbuilder
+  variants: [ja, zh]
 ```
 
 この設定は、CollectionBuilder 自身の検索の設定に従う。

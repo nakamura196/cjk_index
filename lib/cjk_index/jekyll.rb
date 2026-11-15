@@ -37,6 +37,7 @@ module CJKIndex
   module Jekyll
     DEFAULT_OUTPUT = "assets/cjk-index"
     RUNTIME_NAME = "cjk-index.js"
+    CB_DEFAULT_INDEXES = [{ "name" => "search", "preset" => "collectionbuilder" }].freeze
 
     # A file whose content is produced at build time (no source file, no Liquid).
     class GeneratedFile < ::Jekyll::StaticFile
@@ -61,12 +62,20 @@ module CJKIndex
 
       def generate(site)
         config = site.config["cjk_index"]
-        return unless config.is_a?(Hash)
+        config = {} if config.nil? && site.data.key?("config-search")
+        return unless config.is_a?(Hash) && config["enabled"] != false
 
         output = config.fetch("output", DEFAULT_OUTPUT).sub(%r{\A/+}, "").sub(%r{/+\z}, "")
         normalizer = Normalizer.new(tables: Array(config.fetch("variants", Normalizer::DEFAULT_TABLES)), base: site.source)
         site.static_files << GeneratedFile.new(site, output, RUNTIME_NAME, Runtime.source(normalizer: normalizer))
-        Array(config["indexes"]).each do |spec|
+        indexes = if config.key?("indexes")
+                    Array(config["indexes"])
+                  elsif site.data.key?("config-search")
+                    CB_DEFAULT_INDEXES
+                  else
+                    []
+                  end
+        indexes.each do |spec|
           builder = build(site, spec, normalizer)
           if spec["split"]
             dir = "#{output}/#{spec.fetch('name')}"

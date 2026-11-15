@@ -256,11 +256,14 @@ lunr.js: [docs/migrating-from-lunr.md](docs/migrating-from-lunr.md).
 
 ### CollectionBuilder
 
+On a CollectionBuilder site (one with `_data/config-search.csv`), adding the
+gem to `Gemfile` is enough: `assets/cjk-index/search.json` is built by default
+with `preset: collectionbuilder` and `variants: [ja]`. Set `cjk_index:` in
+`_config.yml` only to change options such as `variants`:
+
 ```yaml
 cjk_index:
-  indexes:
-    - name: search
-      preset: collectionbuilder
+  variants: [ja, zh]
 ```
 
 The preset follows CollectionBuilder's own search settings: fields with

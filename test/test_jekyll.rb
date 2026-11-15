@@ -85,6 +85,23 @@ class TestJekyll < Minitest::Test
     end
   end
 
+  def test_collectionbuilder_zero_config_and_variants_only
+    build("cjk_index" => nil) do |dest|
+      assert File.exist?(File.join(dest, "assets/cjk-index/cjk-index.js"))
+      index = JSON.parse(File.read(File.join(dest, "assets/cjk-index/search.json")))
+      assert_equal %w[ja], index["variants"]
+      assert_equal %w[item1.html item2.html], index["refs"]
+    end
+    build("cjk_index" => { "variants" => %w[ja zh] }) do |dest|
+      index = JSON.parse(File.read(File.join(dest, "assets/cjk-index/search.json")))
+      assert_equal %w[ja zh], index["variants"]
+      assert_equal %w[item1.html item2.html], index["refs"]
+    end
+    build("cjk_index" => false) do |dest|
+      refute File.exist?(File.join(dest, "assets/cjk-index/search.json"))
+    end
+  end
+
   def test_split_option
     spec = { "name" => "items", "data" => "demo-metadata", "ref" => "objectid", "fields" => %w[title],
              "split" => true, "shard_size" => 100 }
