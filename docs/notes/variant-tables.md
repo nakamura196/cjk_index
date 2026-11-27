@@ -260,3 +260,38 @@ highlight keeps the selector inside the mark, same as Ruby). 113 runs pass.
 Indexes built before this keep the selectors in their tokens and should be
 rebuilt when the text has any (the digest does not change: it covers the
 tables, not the folding steps).
+
+## 2026-11-27: [ja, zh] chains unrelated kanji
+
+Why: the plan change in #22 (tables from sources, plus a site's own table)
+should be checked on real collections. Three prototype sites, each a
+CollectionBuilder copy of an institution's catalogue (about 1,600–2,800
+records of Japanese material), had been set up with `variants: [ja, zh]`.
+
+Measured: every character of the indexed fields (config-search.csv) was
+folded with each setting and counted. With [ja, zh], 337 / 572 / 638 distinct
+characters fold (18,554 / 33,349 / 23,784 occurrences). With [ja, zh-safe],
+290 / 500 / 553 (13,492 / 27,124 / 19,694).
+
+Found: with both tables, characters that neither table links fold together.
+面 and 麺, 歴 and 暦, 庄 and 荘, 娘 and 嬢, 髪 and 発, 据 and 拠, 岩 and 巖. Two
+ways:
+- one old form goes to different targets: 麵 is 面 in zh and 麺 in ja, so the
+  groups of 面 and 麺 join;
+- two old forms share a simplified form: 歷 → 历 and 曆 → 历 in zh, and ja
+  sends them to 歴 and 暦, so those join.
+Each table alone keeps the pairs apart; [ja, zh-safe] keeps all of them apart.
+On one site the query 麺 found 674 records, all of them for 面.
+The zh table alone also merges 機/机, 係/系 and 後/后, which are different
+words in Japanese (机 found 748 records there).
+
+Cost of zh-safe: pairs that are safe for Japanese text but not 1-to-1 in
+Chinese are lost, e.g. 录 (錄 and 彔), so 实录 no longer finds 実録. Also lost:
+Japanese variants that only the zh table had (敎 → 教, 舘 → 館). These are the
+case for a site's own table (1.1).
+
+Changed: the three sites now use [ja, zh-safe].
+
+Open: [ja, zh] gives no hint of the chaining. Options: say so in the README
+next to the table list, or warn at build time when a group holds two
+characters that each table keeps apart. Not decided.
